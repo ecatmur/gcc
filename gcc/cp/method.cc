@@ -1975,7 +1975,7 @@ locate_ctor (tree type)
 
   push_deferring_access_checks (dk_no_check);
   fn = locate_fn_flags (type, complete_ctor_identifier, NULL_TREE,
-			LOOKUP_SPECULATIVE, tf_none);
+			LOOKUP_NORMAL|LOOKUP_SPECULATIVE, tf_none);
   pop_deferring_access_checks ();
   if (fn == error_mark_node)
     return NULL_TREE;

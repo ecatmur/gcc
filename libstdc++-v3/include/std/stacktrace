@@ -30,6 +30,7 @@
 
 #if __cplusplus > 202002L && _GLIBCXX_HAVE_STACKTRACE
 #include <compare>
+#include <optional>
 #include <string>
 #include <sstream>
 #include <bits/stl_algobase.h>
@@ -343,9 +344,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	    // Need to allocate new storage.
 	    _M_clear();
 
-	    // Use the allocator we will have after this function returns.
-	    auto& __alloc = __pocca ? __other._M_alloc : _M_alloc;
-	    if (auto __f = _M_impl._M_allocate(__alloc, __s))
+	    if constexpr (__pocca)
+	      _M_alloc = __other._M_alloc;
+
+	    if (auto __f = _M_impl._M_allocate(_M_alloc, __s))
 	      {
 		std::uninitialized_copy_n(__other.begin(), __s, __f);
 		_M_impl._M_size = __s;
@@ -358,10 +360,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	    auto __to = std::copy_n(__other.begin(), __s, begin());
 	    std::destroy(__to, end());
 	    _M_impl._M_size = __s;
-	  }
 
-	if constexpr (__pocca)
-	  _M_alloc = __other._M_alloc;
+	    if constexpr (__pocca)
+	      _M_alloc = __other._M_alloc;
+	  }
 
 	return *this;
       }
@@ -663,6 +665,86 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  __val = _Hash_impl::__hash_combine(__h(__f), __val);
 	return __val;
       }
+    };
+
+  template<class E>
+    struct __with_stacktrace_exception_storage
+    {
+	optional<E> ex;
+	void set(void* p) { ex = *static_cast<E*>(p); }
+	E& get() { return *ex; }
+    };
+
+  template<class E> requires (is_default_constructible_v<E> and is_assignable_v<E>)
+    struct __with_stacktrace_exception_storage<E>
+    {
+	E ex;
+	void set(void* p) { ex = *static_cast<E*>(p); }
+	E& get() { return ex; }
+    };
+
+  template<class E> requires (is_reference_v<E>)
+    struct __with_stacktrace_exception_storage<E>
+    {
+	remove_reference_t<E>* ex;
+	void set(void* p) { ex = static_cast<remove_reference_t<E>*>(p); }
+	E get() { return *ex; }
+    };
+
+  template<class E = void, class Alloc = allocator<stacktrace_entry>>
+    class with_stacktrace final
+    {
+    public:
+	using exception_type = E;
+	using stacktrace_type = basic_stacktrace<Alloc>;
+
+	exception_type& get_exception() { return _M_ex.get(); }
+	stacktrace_type& get_stacktrace() { return _M_st; }
+
+    private:
+	with_stacktrace() = default;
+	with_stacktrace(with_stacktrace&&) = default;
+	with_stacktrace& operator=(with_stacktrace&&) = delete;
+
+	static bool __collect(type_info const* __thr_type, void** __thr_obj)
+	{
+	    static thread_local with_stacktrace self;
+	    self._M_ex.set(*__thr_obj);
+	    size_t const skip = 6;
+	    size_t const max = allocator_traits<Alloc>::max_size(self._M_st.get_allocator());
+	    self._M_st = basic_stacktrace<Alloc>::current(skip, max, self._M_st.get_allocator());
+	    *__thr_obj = &self;
+	    return true;
+	}
+
+	__with_stacktrace_exception_storage<E> _M_ex;
+	basic_stacktrace<Alloc> _M_st;
+    };
+
+  template<class Alloc>
+    class with_stacktrace<void, Alloc> final
+    {
+    public:
+	using stacktrace_type = basic_stacktrace<Alloc>;
+
+	stacktrace_type& get_stacktrace() { return _M_st; }
+
+    private:
+	with_stacktrace() = default;
+	with_stacktrace(with_stacktrace&&) = default;
+	with_stacktrace& operator=(with_stacktrace&&) = delete;
+
+	static bool __collect(type_info const* __thr_type, void** __thr_obj)
+	{
+	    static thread_local with_stacktrace self;
+	    size_t const skip = 6;
+	    size_t const max = allocator_traits<Alloc>::max_size(self._M_st.get_allocator());
+	    self._M_st = basic_stacktrace<Alloc>::current(skip, max, self._M_st.get_allocator());
+	    *__thr_obj = &self;
+	    return true;
+	}
+
+	basic_stacktrace<Alloc> _M_st;
     };
 
 _GLIBCXX_END_NAMESPACE_VERSION

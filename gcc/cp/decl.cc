@@ -4379,6 +4379,7 @@ initialize_predefined_identifiers (void)
     {"tuple_size", &tuple_size_identifier, cik_normal},
     {"type", &type_identifier, cik_normal},
     {"value", &value_identifier, cik_normal},
+    {"with_stacktrace", &with_stacktrace_identifier, cik_normal},
     {"_FUN", &fun_identifier, cik_normal},
     {"__closure", &closure_identifier, cik_normal},
     {"heap uninit", &heap_uninit_identifier, cik_normal},

@@ -331,10 +331,19 @@ initialize_handler_parm (tree decl, tree exp)
       && TYPE_PTR_P (TREE_TYPE (init_type)))
     exp = cp_build_addr_expr (exp, tf_warning_or_error);
 
-  exp = ocp_convert (init_type, exp, CONV_IMPLICIT|CONV_FORCE_TEMP, 0,
+  int flags = LOOKUP_NORMAL;
+  exp = ocp_convert (init_type, exp, CONV_IMPLICIT|CONV_FORCE_TEMP, flags,
 		     tf_warning_or_error);
 
   init = convert_from_reference (exp);
+
+  if (std_with_stacktrace_p (non_reference (TREE_TYPE (decl))))
+    {
+      /* std::with_stacktrace does not have public copy ctor but we want to
+	 move (not copy) the in-flight instance into the catch param.  */
+      flags &= ~LOOKUP_PROTECT;
+      init = set_implicit_rvalue_p (move (init));
+    }
 
   /* If the constructor for the catch parm exits via an exception, we
      must call terminate.  See eh23.C.  */
@@ -343,7 +352,7 @@ initialize_handler_parm (tree decl, tree exp)
       /* Generate the copy constructor call directly so we can wrap it.
 	 See also expand_default_init.  */
       init = ocp_convert (TREE_TYPE (decl), init,
-			  CONV_IMPLICIT|CONV_FORCE_TEMP, 0,
+			  CONV_IMPLICIT|CONV_FORCE_TEMP, flags,
 			  tf_warning_or_error);
       /* Force cleanups now to avoid nesting problems with the
 	 MUST_NOT_THROW_EXPR.  */
@@ -902,6 +911,16 @@ is_admissible_throw_operand_or_catch_parameter (tree t, bool is_throw)
 	       "variable size", type);
       return false;
     }
+  else if (std_with_stacktrace_p (nonref_type)
+	   && (is_throw || TYPE_REF_P (type)))
+    {
+      if (is_throw)
+	error ("cannot throw expression of type %qT", type);
+      else
+	error ("cannot declare %<catch%> parameter to be of reference "
+	       "type %qT", type);
+      return false;
+    }
 
   return true;
 }
@@ -955,6 +974,9 @@ can_convert_eh (tree to, tree from)
 {
   to = non_reference (to);
   from = non_reference (from);
+
+  if (std_with_stacktrace_p (to))
+    to = non_reference (TREE_VEC_ELT (CLASSTYPE_TI_ARGS (TYPE_MAIN_VARIANT (to)), 0));
 
   if (same_type_ignoring_top_level_qualifiers_p (to, from))
     return true;
@@ -1362,6 +1384,22 @@ maybe_splice_retval_cleanup (tree compound_stmt)
       CLEANUP_EH_ONLY (cleanup) = true;
       append_to_statement_list_force (cleanup, &compound_stmt);
     }
+}
+
+/* Returns true iff TYPE is some variant of std::with_stacktrace.  */
+
+bool
+std_with_stacktrace_p (tree type)
+{
+  if (!TYPE_P (type))
+    return false;
+  if (cxx_dialect < cxx23)
+    return false;
+  /* Look through typedefs.  */
+  type = TYPE_MAIN_VARIANT (type);
+  return (CLASS_TYPE_P (type)
+	  && CP_TYPE_CONTEXT (type) == std_node
+	  && with_stacktrace_identifier == DECL_NAME (TYPE_NAME (type)));
 }
 
 #include "gt-cp-except.h"

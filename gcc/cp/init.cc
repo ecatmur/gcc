@@ -1169,7 +1169,7 @@ perform_member_init (tree member, tree init, hash_set<tree> &uninitialized)
 					     tf_warning_or_error);
       expr = build_delete (input_location,
 			   type, expr, sfk_complete_destructor,
-			   LOOKUP_NONVIRTUAL|LOOKUP_DESTRUCTOR, 0,
+			   LOOKUP_NORMAL|LOOKUP_NONVIRTUAL|LOOKUP_DESTRUCTOR, 0,
 			   tf_warning_or_error);
 
       if (expr != error_mark_node
@@ -1735,7 +1735,7 @@ construct_virtual_base (tree vbase, tree arguments)
   exp = convert_to_base_statically (current_class_ref, vbase);
 
   expand_aggr_init_1 (vbase, current_class_ref, exp, arguments,
-		      0, tf_warning_or_error);
+		      LOOKUP_NORMAL, tf_warning_or_error);
   finish_then_clause (inner_if_stmt);
   finish_if_stmt (inner_if_stmt);
 

@@ -20748,7 +20748,8 @@ tsubst_copy_and_build (tree t,
 	      ret = (build_new_method_call
 		      (instance, fn,
 		       &call_args, NULL_TREE,
-		       qualified_p ? LOOKUP_NONVIRTUAL : LOOKUP_NORMAL,
+		       (qualified_p ? LOOKUP_NORMAL|LOOKUP_NONVIRTUAL
+			: LOOKUP_NORMAL),
 		       /*fn_p=*/NULL,
 		       complain));
 	  }

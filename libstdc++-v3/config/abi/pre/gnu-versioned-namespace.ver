@@ -260,6 +260,7 @@ CXXABI_2.0 {
     _ZN10__cxxabiv129__pointer_to_member_type_info*;
     _ZN10__cxxabiv119__pointer_type_info*;
     _ZN10__cxxabiv120__si_class_type_info*;
+    _ZN10__cxxabiv127__with_stacktrace_type_info*;
     _ZN10__cxxabiv121__vmi_class_type_info*;
 
     # *_type_info classes, member functions
@@ -269,6 +270,7 @@ CXXABI_2.0 {
     _ZNK10__cxxabiv129__pointer_to_member_type_info*;
     _ZNK10__cxxabiv119__pointer_type_info*;
     _ZNK10__cxxabiv120__si_class_type_info*;
+    _ZNK10__cxxabiv127__with_stacktrace_type_info*;
     _ZNK10__cxxabiv121__vmi_class_type_info*;
 
     # typeinfo structure
@@ -284,6 +286,7 @@ CXXABI_2.0 {
     _ZTIN10__cxxabiv129__pointer_to_member_type_infoE;
     _ZTIN10__cxxabiv119__pointer_type_infoE;
     _ZTIN10__cxxabiv120__si_class_type_infoE;
+    _ZTIN10__cxxabiv127__with_stacktrace_type_infoE;
     _ZTIN10__cxxabiv121__vmi_class_type_infoE;
     _ZTIN10__cxxabiv115__forced_unwindE;
     _ZTIN10__cxxabiv119__foreign_exceptionE;
@@ -303,6 +306,7 @@ CXXABI_2.0 {
     _ZTSN10__cxxabiv129__pointer_to_member_type_infoE;
     _ZTSN10__cxxabiv119__pointer_type_infoE;
     _ZTSN10__cxxabiv120__si_class_type_infoE;
+    _ZTSN10__cxxabiv127__with_stacktrace_type_infoE;
     _ZTSN10__cxxabiv121__vmi_class_type_infoE;
 
     # typeinfo for char8_t
@@ -343,6 +347,7 @@ CXXABI_2.0 {
     _ZTVN10__cxxabiv129__pointer_to_member_type_infoE;
     _ZTVN10__cxxabiv119__pointer_type_infoE;
     _ZTVN10__cxxabiv120__si_class_type_infoE;
+    _ZTVN10__cxxabiv127__with_stacktrace_type_infoE;
     _ZTVN10__cxxabiv121__vmi_class_type_infoE;
 
     # operator delete(void*, std::size_t)

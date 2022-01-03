@@ -9350,7 +9350,8 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
 	access_fn = DECL_TI_TEMPLATE (fn);
       else
 	access_fn = fn;
-      if (!perform_or_defer_access_check (cand->access_path, access_fn,
+      if ((flags & LOOKUP_PROTECT)
+	  && !perform_or_defer_access_check (cand->access_path, access_fn,
 					  fn, complain))
 	return error_mark_node;
     }

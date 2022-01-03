@@ -169,6 +169,7 @@ enum cp_tree_index
     CPTI_TUPLE_SIZE_IDENTIFIER,
     CPTI_TYPE_IDENTIFIER,
     CPTI_VALUE_IDENTIFIER,
+    CPTI_WITH_STACKTRACE_IDENTIFIER,
     CPTI_FUN_IDENTIFIER,
     CPTI_CLOSURE_IDENTIFIER,
     CPTI_HEAP_UNINIT_IDENTIFIER,
@@ -329,6 +330,7 @@ extern GTY(()) tree cp_global_trees[CPTI_MAX];
 #define tuple_size_identifier		cp_global_trees[CPTI_TUPLE_SIZE_IDENTIFIER]
 #define type_identifier			cp_global_trees[CPTI_TYPE_IDENTIFIER]
 #define value_identifier		cp_global_trees[CPTI_VALUE_IDENTIFIER]
+#define with_stacktrace_identifier	cp_global_trees[CPTI_WITH_STACKTRACE_IDENTIFIER]
 #define fun_identifier			cp_global_trees[CPTI_FUN_IDENTIFIER]
 #define closure_identifier		cp_global_trees[CPTI_CLOSURE_IDENTIFIER]
 #define heap_uninit_identifier		cp_global_trees[CPTI_HEAP_UNINIT_IDENTIFIER]
@@ -8433,6 +8435,9 @@ extern bool morph_fn_to_coro			(tree, tree *, tree *);
 extern tree coro_get_actor_function		(tree);
 extern tree coro_get_destroy_function		(tree);
 extern tree coro_get_ramp_function		(tree);
+
+/* In except.c */
+extern bool std_with_stacktrace_p		(tree);
 
 /* Inline bodies.  */
   
