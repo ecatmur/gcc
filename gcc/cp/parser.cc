@@ -28195,13 +28195,15 @@ cp_parser_handler (cp_parser* parser)
 {
   tree handler;
   tree declaration;
+  tree std_attrs;
 
   cp_parser_require_keyword (parser, RID_CATCH, RT_CATCH);
   handler = begin_handler ();
   matching_parens parens;
   parens.require_open (parser);
+  std_attrs = cp_parser_std_attribute_spec_seq (parser);
   declaration = cp_parser_exception_declaration (parser);
-  finish_handler_parms (declaration, handler);
+  finish_handler_parms (std_attrs, declaration, handler);
   parens.require_close (parser);
   cp_parser_compound_statement (parser, NULL, BCS_NORMAL, false);
   finish_handler (handler);
@@ -28210,10 +28212,9 @@ cp_parser_handler (cp_parser* parser)
 /* Parse an exception-declaration.
 
    exception-declaration:
-     type-specifier-seq declarator
-     type-specifier-seq abstract-declarator
-     type-specifier-seq
-     ...
+     attribute-specifier-seq [opt] type-specifier-seq declarator
+     attribute-specifier-seq [opt] type-specifier-seq abstract-declarator [opt]
+     attribute-specifier-seq [opt] ...
 
    Returns a VAR_DECL for the declaration, or NULL_TREE if the
    ellipsis variant is used.  */
@@ -29099,7 +29100,7 @@ cp_parser_check_std_attribute (location_t loc, tree attributes, tree attribute)
 {
   static auto alist = { "noreturn", "deprecated", "nodiscard", "maybe_unused",
 			"likely", "unlikely", "fallthrough",
-			"no_unique_address" };
+			"no_unique_address", "with_stacktrace" };
   if (attributes)
     for (const auto &a : alist)
       if (is_attribute_p (a, get_attribute_name (attribute))

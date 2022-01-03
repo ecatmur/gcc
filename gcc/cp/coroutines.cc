@@ -4235,7 +4235,7 @@ coro_rewrite_function_body (location_t fn_start, tree fnbody, tree orig,
       TRY_HANDLERS (tcb) = push_stmt_list ();
       /* Mimic what the parser does for the catch.  */
       tree handler = begin_handler ();
-      finish_handler_parms (NULL_TREE, handler); /* catch (...) */
+      finish_handler_parms (NULL_TREE, NULL_TREE, handler); /* catch (...) */
 
       /* Get the initial await resume called value.  */
       tree not_iarc_if = begin_if_stmt ();
@@ -5108,7 +5108,7 @@ morph_fn_to_coro (tree orig, tree *resumer, tree *destroyer)
     {
       TRY_HANDLERS (ramp_cleanup) = push_stmt_list ();
       tree handler = begin_handler ();
-      finish_handler_parms (NULL_TREE, handler); /* catch (...) */
+      finish_handler_parms (NULL_TREE, NULL_TREE, handler); /* catch (...) */
 
       /* If we have a live G.R.O in the return slot, then run its DTOR.
      When the return object is constructed from a separate g.r.o, this is

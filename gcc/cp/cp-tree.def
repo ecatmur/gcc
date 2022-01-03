@@ -282,10 +282,10 @@ DEFTREECODE (TRY_BLOCK, "try_block", tcc_statement, 2)
 DEFTREECODE (EH_SPEC_BLOCK, "eh_spec_block", tcc_statement, 2)
 
 /* A HANDLER wraps a catch handler for the HANDLER_TYPE.  If this is
-   CATCH_ALL_TYPE, then the handler catches all types.  The declaration of
+   NULL_TREE, then the handler catches all types.  The declaration of
    the catch variable is in HANDLER_PARMS, and the body block in
-   HANDLER_BODY.  */
-DEFTREECODE (HANDLER, "handler", tcc_statement, 2)
+   HANDLER_BODY.  Attributes are in HANDLER_ATTRS.  */
+DEFTREECODE (HANDLER, "handler", tcc_statement, 3)
 
 /* A MUST_NOT_THROW_EXPR wraps an expression that may not
    throw, and must call terminate if it does.  The second argument
@@ -589,6 +589,11 @@ DEFTREECODE (CO_YIELD_EXPR, "co_yield", tcc_expression, 2)
    Op1 is the promise return_xxxx call for for the expression given. */
 
 DEFTREECODE (CO_RETURN_EXPR, "co_return", tcc_statement, 2)
+
+/* Signifies that a handler expects stacktrace capture at throw.
+   WITH_STACKTRACE_TYPE_TYPE is the HANDLER_TYPE that this wraps (which
+   may be NULL_TREE).  */
+DEFTREECODE (WITH_STACKTRACE_TYPE, "with_stacktrace", tcc_type, 0)
 
 /*
 Local variables:

@@ -1633,7 +1633,7 @@ begin_handler (void)
 {
   tree r;
 
-  r = build_stmt (input_location, HANDLER, NULL_TREE, NULL_TREE);
+  r = build_stmt (input_location, HANDLER, NULL_TREE, NULL_TREE, NULL_TREE);
   add_stmt (r);
 
   /* Create a binding level for the eh_info and the exception object
@@ -1648,11 +1648,11 @@ begin_handler (void)
    if this is a `catch (...)' clause.  */
 
 void
-finish_handler_parms (tree decl, tree handler)
+finish_handler_parms (tree attrs, tree decl, tree handler)
 {
-  tree type = NULL_TREE;
   if (processing_template_decl)
     {
+      tree type = NULL_TREE;
       if (decl)
 	{
 	  decl = pushdecl (decl);
@@ -1660,10 +1660,20 @@ finish_handler_parms (tree decl, tree handler)
 	  HANDLER_PARMS (handler) = decl;
 	  type = TREE_TYPE (decl);
 	}
+      HANDLER_ATTRS (handler) = attrs;
+      HANDLER_TYPE (handler) = type;
     }
   else
     {
-      type = expand_start_catch_block (decl);
+      /* We don't have a way to distinguish CATCHPARM nodes, so extract
+	 with_stacktrace before applying attributes to decl.  */
+      tree with_stacktrace = lookup_attribute ("with_stacktrace", attrs);
+      if (with_stacktrace)
+	attrs = remove_attribute ("with_stacktrace", attrs);
+      if (decl != NULL_TREE)
+	decl_attributes (&decl, attrs, 0);
+
+      tree type = expand_start_catch_block (decl);
       if (warn_catch_value
 	  && type != NULL_TREE
 	  && type != error_mark_node
@@ -1687,8 +1697,19 @@ finish_handler_parms (tree decl, tree handler)
 			OPT_Wcatch_value_,
 			"catching non-reference type %q#T", orig_type);
 	}
+
+      if (with_stacktrace)
+	{
+	  /* Switch out type for a with_stacktrace wrapper at the last
+	     possible moment.  This is recovered in rtti.cc.  */
+	  tree t = cxx_make_type (WITH_STACKTRACE_TYPE);
+	  WITH_STACKTRACE_TYPE_TYPE (t) = type;
+	  mark_used (eh_type_info (t));
+	  type = t;
+	}
+
+      HANDLER_TYPE (handler) = type;
     }
-  HANDLER_TYPE (handler) = type;
 }
 
 /* Finish a handler, which may be given by HANDLER.  The BLOCKs are

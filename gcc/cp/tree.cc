@@ -4947,6 +4947,23 @@ handle_likeliness_attribute (tree *node, tree name, tree args,
     return error_mark_node;
 }
 
+/* Handle a C++23 "with_stacktrace" attribute; arguments as in
+   struct attribute_spec.handler.  */
+static tree
+handle_with_stacktrace_attribute (tree* /*node*/,
+				  tree name,
+				  tree /*args*/,
+				  int /*flags*/,
+				  bool* no_add_attrs)
+{
+  /* finish_handler_parms checks for with_stacktrace manually, so invoking
+     this handler is always erroneous.  */
+  warning (OPT_Wattributes, "%qE attribute can only be applied to catch "
+	   "parameters", name);
+  *no_add_attrs = true;
+  return NULL_TREE;
+}
+
 /* Table of valid C++ attributes.  */
 const struct attribute_spec cxx_attribute_table[] =
 {
@@ -4976,6 +4993,8 @@ const struct attribute_spec std_attribute_table[] =
     handle_likeliness_attribute, attr_cold_hot_exclusions },
   { "noreturn", 0, 0, true, false, false, false,
     handle_noreturn_attribute, attr_noreturn_exclusions },
+  { "with_stacktrace", 0, 0, true, false, false, false,
+    handle_with_stacktrace_attribute, NULL },
   { NULL, 0, 0, false, false, false, false, NULL, NULL }
 };
 

@@ -343,9 +343,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	    // Need to allocate new storage.
 	    _M_clear();
 
-	    // Use the allocator we will have after this function returns.
-	    auto& __alloc = __pocca ? __other._M_alloc : _M_alloc;
-	    if (auto __f = _M_impl._M_allocate(__alloc, __s))
+	    if constexpr (__pocca)
+	      _M_alloc = __other._M_alloc;
+
+	    if (auto __f = _M_impl._M_allocate(_M_alloc, __s))
 	      {
 		std::uninitialized_copy_n(__other.begin(), __s, __f);
 		_M_impl._M_size = __s;
@@ -358,10 +359,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	    auto __to = std::copy_n(__other.begin(), __s, begin());
 	    std::destroy(__to, end());
 	    _M_impl._M_size = __s;
-	  }
 
-	if constexpr (__pocca)
-	  _M_alloc = __other._M_alloc;
+	    if constexpr (__pocca)
+	      _M_alloc = __other._M_alloc;
+	  }
 
 	return *this;
       }
@@ -664,6 +665,23 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	return __val;
       }
     };
+
+  inline stacktrace& __current_exception_stacktrace()
+  {
+    thread_local stacktrace __st;
+    return __st;
+  }
+
+  inline const stacktrace& current_exception_stacktrace()
+  {
+    return __current_exception_stacktrace();
+  }
+
+  inline void __collect_current_exception_stacktrace()
+  {
+    size_t const __skip = 6;
+    __current_exception_stacktrace() = stacktrace::current(__skip);
+  }
 
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace std

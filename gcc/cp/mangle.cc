@@ -2361,6 +2361,16 @@ write_type (tree type)
 		G.need_abi_warning = 1;
 	      break;
 
+	    case WITH_STACKTRACE_TYPE:
+	      {
+		write_char ('U');
+		write_unsigned_number (strlen ("with_stacktrace"));
+		write_string ("with_stacktrace");
+		tree t = WITH_STACKTRACE_TYPE_TYPE (type);
+		write_type (t ? t : void_type_node);
+	      }
+	      break;
+
 	    case TYPEOF_TYPE:
 	      sorry ("mangling %<typeof%>, use %<decltype%> instead");
 	      break;

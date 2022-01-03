@@ -85,6 +85,7 @@ enum tinfo_kind
   TK_POINTER_MEMBER_TYPE, /* abi::__pointer_to_member_type_info */
   TK_CLASS_TYPE,	/* abi::__class_type_info */
   TK_SI_CLASS_TYPE,	/* abi::__si_class_type_info */
+  TK_WITH_STACKTRACE_TYPE,	/* abi::__with_stacktrace_type_info */
   TK_VMI_CLASS_TYPES,	/* abi::__vmi_class_type_info<int> */
   TK_MAX
 };
@@ -104,6 +105,7 @@ static const char *const tinfo_names[TK_MAX] =
   "__pointer_to_member_type_info",
   "__class_type_info",
   "__si_class_type_info",
+  "__with_stacktrace_type_info",
   "__vmi_class_type_info"
 };
 
@@ -133,7 +135,7 @@ static tree generic_initializer (tinfo_s *, tree);
 static tree ptr_initializer (tinfo_s *, tree);
 static tree ptm_initializer (tinfo_s *, tree);
 static tree class_initializer (tinfo_s *, tree, unsigned, ...);
-static tree get_pseudo_ti_init (tree, unsigned);
+static tree get_pseudo_ti_init (tree, unsigned, tree);
 static unsigned get_pseudo_ti_index (tree);
 static tinfo_s *get_tinfo_desc (unsigned);
 static void create_tinfo_types (void);
@@ -1115,6 +1117,52 @@ class_initializer (tinfo_s *ti, tree target, unsigned n, ...)
   return init;
 }
 
+/* Return the CONSTRUCTOR expr for a with_stacktrace_type_info of class TYPE.
+   Fields being initialized are:
+      const std::type_info* __base; // typeid(T) in with_stacktrace<T, Alloc>
+      void (*__fn)(); // &std::__collect_current_exception_stacktrace
+ */
+
+static tree
+with_stacktrace_initializer (tinfo_s *ti, tree target, tree decl)
+{
+  tree init = tinfo_base_init (ti, target);
+  tree type = WITH_STACKTRACE_TYPE_TYPE (target);
+  tree base = type ? get_void_tinfo_ptr (type) :
+    build_zero_cst (const_ptr_type_node);
+  tree collect_fn = lookup_qualified_name (std_node,
+    "__collect_current_exception_stacktrace");
+  if (collect_fn == error_mark_node)
+  {
+    gcc_rich_location richloc (DECL_SOURCE_LOCATION (decl));
+    if (cxx_dialect < cxx23)
+      {
+	error_at (&richloc,
+	  "%<[[with_stacktrace]]%> only available with "
+	  "%<-std=c++2b%> or %<-std=gnu++2b%>");
+      }
+    else
+      {
+	maybe_add_include_fixit (&richloc, "<stacktrace>", false);
+	error_at (&richloc,
+	  "must %<#include <stacktrace>%> before using %<[[with_stacktrace]]%>");
+      }
+    return NULL_TREE;
+  }
+  mark_used (collect_fn);
+  vec<constructor_elt, va_gc> *v;
+  vec_alloc (v, 3);
+
+  CONSTRUCTOR_APPEND_ELT (v, NULL_TREE, init);
+  CONSTRUCTOR_APPEND_ELT (v, NULL_TREE, base);
+  CONSTRUCTOR_APPEND_ELT (v, NULL_TREE, build_address (collect_fn));
+
+  init = build_constructor (init_list_type_node, v);
+  TREE_CONSTANT (init) = 1;
+  TREE_STATIC (init) = 1;
+  return init;
+}
+
 /* Returns true if the typeinfo for type should be placed in
    the runtime library.  */
 
@@ -1149,7 +1197,7 @@ typeinfo_in_lib_p (tree type)
    the index of the descriptor in the tinfo_desc vector. */
 
 static tree
-get_pseudo_ti_init (tree type, unsigned tk_index)
+get_pseudo_ti_init (tree type, unsigned tk_index, tree decl)
 {
   tinfo_s *ti = get_tinfo_desc (tk_index);
 
@@ -1180,6 +1228,9 @@ get_pseudo_ti_init (tree type, unsigned tk_index)
 	ti = &(*tinfo_descs)[tk_index];
 	return class_initializer (ti, type, 1, tinfo);
       }
+
+    case TK_WITH_STACKTRACE_TYPE:
+      return with_stacktrace_initializer (ti, type, decl);
 
     default:
       {
@@ -1304,6 +1355,10 @@ get_pseudo_ti_index (tree type)
 	  else
 	    ix = TK_VMI_CLASS_TYPES + num_bases - 1;
 	}
+      break;
+
+    case WITH_STACKTRACE_TYPE:
+      ix = TK_WITH_STACKTRACE_TYPE;
       break;
 
     default:
@@ -1442,6 +1497,21 @@ get_tinfo_desc (unsigned ix)
 				   NULL_TREE, const_ptr_type_node);
 	DECL_CHAIN (fld_ptr) = fields;
 	fields = fld_ptr;
+	break;
+      }
+
+    case TK_WITH_STACKTRACE_TYPE:
+      {
+	tree fld_ptr = build_decl (BUILTINS_LOCATION, FIELD_DECL,
+				   NULL_TREE, const_ptr_type_node);
+	DECL_CHAIN (fld_ptr) = fields;
+	fields = fld_ptr;
+
+	tree fn = build_function_type_list (void_type_node, NULL_TREE);
+	tree fld_fn = build_decl (BUILTINS_LOCATION, FIELD_DECL,
+				  NULL_TREE, build_pointer_type (fn));
+	DECL_CHAIN (fld_fn) = fields;
+	fields = fld_fn;
 	break;
       }
 
@@ -1693,7 +1763,7 @@ emit_tinfo_decl (tree decl)
       tree init;
 
       DECL_EXTERNAL (decl) = 0;
-      init = get_pseudo_ti_init (type, get_pseudo_ti_index (type));
+      init = get_pseudo_ti_init (type, get_pseudo_ti_index (type), decl);
       DECL_INITIAL (decl) = init;
       mark_used (decl);
       cp_finish_decl (decl, init, false, NULL_TREE, 0);
