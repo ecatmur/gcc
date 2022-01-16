@@ -91,22 +91,22 @@ struct GTY(()) binding_slot {
   }
   bool is_lazy () const
   {
-    return bool (uintptr_t (u.binding) & 1);
+    return bool (reinterpret_cast<uintptr_t> (u.binding) & 1);
   }
   void set_lazy (unsigned snum)
   {
     gcc_checking_assert (!u.binding);
-    u.binding = tree (uintptr_t ((snum << 1) | 1));
+    u.binding = reinterpret_cast<tree> (uintptr_t ((snum << 1) | 1));
   }
   void or_lazy (unsigned snum)
   {
     gcc_checking_assert (is_lazy ());
-    u.binding = tree (uintptr_t (u.binding) | (snum << 1));
+    u.binding = reinterpret_cast<tree> (reinterpret_cast<uintptr_t> (u.binding) | (snum << 1));
   }
   unsigned get_lazy () const
   {
     gcc_checking_assert (is_lazy ());
-    return unsigned (uintptr_t (u.binding) >> 1);
+    return unsigned (reinterpret_cast<uintptr_t> (u.binding) >> 1);
   }
 };
 

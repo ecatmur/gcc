@@ -13725,7 +13725,7 @@ ordinary_loc_of (line_maps *lmaps, location_t from)
 static module_state **
 get_module_slot (tree name, module_state *parent, bool partition, bool insert)
 {
-  module_state_hash::compare_type ct (name, uintptr_t (parent) | partition);
+  module_state_hash::compare_type ct (name, reinterpret_cast<uintptr_t> (parent) | partition);
   hashval_t hv = module_state_hash::hash (ct);
 
   return modules_hash->find_slot_with_hash (ct, hv, insert ? INSERT : NO_INSERT);
