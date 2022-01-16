@@ -486,6 +486,7 @@ extern GTY(()) tree cp_global_trees[CPTI_MAX];
       IMPLICIT_CONV_EXPR_BRACED_INIT (in IMPLICIT_CONV_EXPR)
       PACK_EXPANSION_AUTO_P (in *_PACK_EXPANSION)
    3: IMPLICIT_RVALUE_P (in NON_LVALUE_EXPR or STATIC_CAST_EXPR)
+      FUNCTIONAL_CAST_P (in CAST_EXPR)
       ICS_BAD_FLAG (in _CONV)
       FN_TRY_BLOCK_P (in TRY_BLOCK)
       BIND_EXPR_BODY_BLOCK (in BIND_EXPR)
@@ -4044,6 +4045,9 @@ struct GTY(()) lang_decl {
 #define IMPLICIT_RVALUE_P(NODE) \
   TREE_LANG_FLAG_3 (TREE_CHECK2 ((NODE), NON_LVALUE_EXPR, STATIC_CAST_EXPR))
 
+#define FUNCTIONAL_CAST_P(NODE) \
+  TREE_LANG_FLAG_3 (TREE_CHECK ((NODE), CAST_EXPR))
+
 #define NEW_EXPR_USE_GLOBAL(NODE) \
   TREE_LANG_FLAG_0 (NEW_EXPR_CHECK (NODE))
 #define DELETE_EXPR_USE_GLOBAL(NODE) \
@@ -5565,6 +5569,7 @@ enum tsubst_flags {
 				    constraint normalization.  */
   tf_tst_ok = 1 << 12,		 /* Allow a typename-specifier to name
 				    a template (C++17 or later).  */
+  tf_functional_cast = 1 << 13,
   /* Convenient substitution flags combinations.  */
   tf_warning_or_error = tf_warning | tf_error
 };

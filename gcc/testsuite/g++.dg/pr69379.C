@@ -16,5 +16,5 @@ void fn1() {
   A a("", "");
   typedef void *Get;
   typedef void (Dict::*d)(T);
-  a.m_fn1("", Get(), d(&Dict::m_fn2), "");
+  a.m_fn1("", Get(), (d)(&Dict::m_fn2), "");
 }

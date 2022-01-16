@@ -31859,7 +31859,7 @@ cp_parser_functional_cast (cp_parser* parser, tree type)
   location_t combined_loc = make_location (start_loc, start_loc,
 					   parser->lexer);
   cast = build_functional_cast (combined_loc, type, expression_list,
-                                tf_warning_or_error);
+				tf_functional_cast | tf_warning_or_error);
   
   /* [expr.const]/1: In an integral constant expression "only type
      conversions to integral or enumeration type can be used".  */

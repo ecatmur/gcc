@@ -67,12 +67,12 @@ namespace std
 
     constexpr explicit
     partial_ordering(__cmp_cat::_Ord __v) noexcept
-    : _M_value(__cmp_cat::type(__v))
+    : _M_value(static_cast<__cmp_cat::type>(__v))
     { }
 
     constexpr explicit
     partial_ordering(__cmp_cat::_Ncmp __v) noexcept
-    : _M_value(__cmp_cat::type(__v))
+    : _M_value(static_cast<__cmp_cat::type>(__v))
     { }
 
     friend class weak_ordering;
@@ -145,7 +145,7 @@ namespace std
     operator<=>(__cmp_cat::__unspec, partial_ordering __v) noexcept
     {
       if (__v._M_value & 1)
-	return partial_ordering(__cmp_cat::_Ord(-__v._M_value));
+	return partial_ordering(static_cast<__cmp_cat::_Ord>(-__v._M_value));
       else
 	return __v;
     }
@@ -169,7 +169,7 @@ namespace std
     __cmp_cat::type _M_value;
 
     constexpr explicit
-    weak_ordering(__cmp_cat::_Ord __v) noexcept : _M_value(__cmp_cat::type(__v))
+    weak_ordering(__cmp_cat::_Ord __v) noexcept : _M_value(static_cast<__cmp_cat::type>(__v))
     { }
 
     friend class strong_ordering;
@@ -182,7 +182,7 @@ namespace std
 
     [[nodiscard]]
     constexpr operator partial_ordering() const noexcept
-    { return partial_ordering(__cmp_cat::_Ord(_M_value)); }
+    { return partial_ordering(static_cast<__cmp_cat::_Ord>(_M_value)); }
 
     // comparisons
     [[nodiscard]]
@@ -242,7 +242,7 @@ namespace std
     [[nodiscard]]
     friend constexpr weak_ordering
     operator<=>(__cmp_cat::__unspec, weak_ordering __v) noexcept
-    { return weak_ordering(__cmp_cat::_Ord(-__v._M_value)); }
+    { return weak_ordering(static_cast<__cmp_cat::_Ord>(-__v._M_value)); }
   };
 
   // valid values' definitions
@@ -261,7 +261,7 @@ namespace std
 
     constexpr explicit
     strong_ordering(__cmp_cat::_Ord __v) noexcept
-    : _M_value(__cmp_cat::type(__v))
+    : _M_value(static_cast<__cmp_cat::type>(__v))
     { }
 
   public:
@@ -273,11 +273,11 @@ namespace std
 
     [[nodiscard]]
     constexpr operator partial_ordering() const noexcept
-    { return partial_ordering(__cmp_cat::_Ord(_M_value)); }
+    { return partial_ordering(static_cast<__cmp_cat::_Ord>(_M_value)); }
 
     [[nodiscard]]
     constexpr operator weak_ordering() const noexcept
-    { return weak_ordering(__cmp_cat::_Ord(_M_value)); }
+    { return weak_ordering(static_cast<__cmp_cat::_Ord>(_M_value)); }
 
     // comparisons
     [[nodiscard]]
@@ -337,7 +337,7 @@ namespace std
     [[nodiscard]]
     friend constexpr strong_ordering
     operator<=>(__cmp_cat::__unspec, strong_ordering __v) noexcept
-    { return strong_ordering(__cmp_cat::_Ord(-__v._M_value)); }
+    { return strong_ordering(static_cast<__cmp_cat::_Ord>(-__v._M_value)); }
   };
 
   // valid values' definitions

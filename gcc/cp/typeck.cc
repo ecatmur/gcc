@@ -7834,6 +7834,49 @@ convert_ptrmem (tree type, tree expr, bool allow_inverse_p,
 			     allow_inverse_p, c_cast_p, complain);
 }
 
+static tree
+build_direct_init_cast (tree type, tree expr, bool c_cast_p,
+			tsubst_flags_t complain)
+{
+  tree result = perform_direct_initialization_if_possible (type, expr,
+							   c_cast_p, complain);
+  /* P1975 allows static_cast<Aggr>(42), as well as static_cast<T[5]>(42),
+     which initialize the first element of the aggregate.  We need to handle
+     the array case specifically.  */
+  if (result == NULL_TREE
+      && cxx_dialect >= cxx20
+      && TREE_CODE (type) == ARRAY_TYPE)
+    {
+      /* Create { EXPR } and perform direct-initialization from it.  */
+      tree e = build_constructor_single (init_list_type_node, NULL_TREE, expr);
+      CONSTRUCTOR_IS_DIRECT_INIT (e) = true;
+      CONSTRUCTOR_IS_PAREN_INIT (e) = true;
+      result = perform_direct_initialization_if_possible (type, e, c_cast_p,
+							  complain);
+    }
+  if (result)
+    {
+      if (processing_template_decl)
+	return expr;
+
+      result = convert_from_reference (result);
+
+      /* [expr.static.cast]
+
+	 If T is a reference type, the result is an lvalue; otherwise,
+	 the result is an rvalue.  */
+      if (!TYPE_REF_P (type))
+	{
+	  result = rvalue (result);
+
+	  if (result == expr && SCALAR_TYPE_P (type))
+	    /* Leave some record of the cast.  */
+	    result = build_nop (type, expr);
+	}
+    }
+  return result;
+}
+
 /* Perform a static_cast from EXPR to TYPE.  When C_CAST_P is true,
    this static_cast is being attempted as one of the possible casts
    allowed by a C-style cast.  (In that case, accessibility of base
@@ -8000,43 +8043,9 @@ build_static_cast_1 (location_t loc, tree type, tree expr, bool c_cast_p,
      static_cast of the form static_cast<T>(e) if the declaration T
      t(e);" is well-formed, for some invented temporary variable
      t.  */
-  result = perform_direct_initialization_if_possible (type, expr,
-						      c_cast_p, complain);
-  /* P1975 allows static_cast<Aggr>(42), as well as static_cast<T[5]>(42),
-     which initialize the first element of the aggregate.  We need to handle
-     the array case specifically.  */
-  if (result == NULL_TREE
-      && cxx_dialect >= cxx20
-      && TREE_CODE (type) == ARRAY_TYPE)
-    {
-      /* Create { EXPR } and perform direct-initialization from it.  */
-      tree e = build_constructor_single (init_list_type_node, NULL_TREE, expr);
-      CONSTRUCTOR_IS_DIRECT_INIT (e) = true;
-      CONSTRUCTOR_IS_PAREN_INIT (e) = true;
-      result = perform_direct_initialization_if_possible (type, e, c_cast_p,
-							  complain);
-    }
+  result = build_direct_init_cast(type, expr, c_cast_p, complain);
   if (result)
-    {
-      if (processing_template_decl)
-	return expr;
-
-      result = convert_from_reference (result);
-
-      /* [expr.static.cast]
-
-	 If T is a reference type, the result is an lvalue; otherwise,
-	 the result is an rvalue.  */
-      if (!TYPE_REF_P (type))
-	{
-	  result = rvalue (result);
-
-	  if (result == expr && SCALAR_TYPE_P (type))
-	    /* Leave some record of the cast.  */
-	    result = build_nop (type, expr);
-	}
-      return result;
-    }
+    return result;
 
   /* [expr.static.cast]
 
@@ -8764,6 +8773,7 @@ cp_build_c_cast (location_t loc, tree type, tree expr,
 			  tree_cons (NULL_TREE, value, NULL_TREE));
       /* We don't know if it will or will not have side effects.  */
       TREE_SIDE_EFFECTS (t) = 1;
+      FUNCTIONAL_CAST_P (t) = (complain & tf_functional_cast) ? 1 : 0;
       return convert_from_reference (t);
     }
 
@@ -8780,6 +8790,16 @@ cp_build_c_cast (location_t loc, tree type, tree expr,
       && TREE_CODE (value) == NOP_EXPR
       && TREE_TYPE (value) == TREE_TYPE (TREE_OPERAND (value, 0)))
     value = TREE_OPERAND (value, 0);
+
+  if (cxx_dialect >= cxx23 && (complain & tf_functional_cast))
+    {
+      result = build_direct_init_cast(type, expr, /*c_cast_p*/false, complain);
+      if (result)
+	return result;
+      if (complain & tf_error)
+	error_at (loc, "cannot perform functional cast as direct-initialization");
+      return error_mark_node;
+    }
 
   if (TREE_CODE (type) == ARRAY_TYPE)
     {

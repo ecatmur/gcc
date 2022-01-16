@@ -244,7 +244,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
 	constexpr uintptr_t __ct = 16;
 	static __waiter_pool_base __w[__ct];
-	auto __key = (uintptr_t(__addr) >> 2) % __ct;
+	auto __key = (reinterpret_cast<uintptr_t>(__addr) >> 2) % __ct;
 	return __w[__key];
       }
     };
