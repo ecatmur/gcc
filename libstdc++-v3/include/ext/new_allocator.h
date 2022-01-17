@@ -120,7 +120,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 #if __cpp_aligned_new
 	if (alignof(_Tp) > __STDCPP_DEFAULT_NEW_ALIGNMENT__)
 	  {
-	    std::align_val_t __al = std::align_val_t(alignof(_Tp));
+	    std::align_val_t __al = static_cast<std::align_val_t>(alignof(_Tp));
 	    return static_cast<_Tp*>(::operator new(__n * sizeof(_Tp), __al));
 	  }
 #endif
@@ -138,7 +138,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 # if __cpp_sized_deallocation
 			      __t * sizeof(_Tp),
 # endif
-			      std::align_val_t(alignof(_Tp)));
+			      static_cast<std::align_val_t>(alignof(_Tp)));
 	    return;
 	  }
 #endif

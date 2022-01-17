@@ -192,7 +192,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     {
       int __ret = __glibcxx_rwlock_wrlock(&_M_rwlock);
       if (__ret == EDEADLK)
-	__throw_system_error(int(errc::resource_deadlock_would_occur));
+	__throw_system_error(static_cast<int>(errc::resource_deadlock_would_occur));
       // Errors not handled: EINVAL
       __glibcxx_assert(__ret == 0);
     }
@@ -229,7 +229,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__ret = __glibcxx_rwlock_rdlock(&_M_rwlock);
       while (__ret == EAGAIN);
       if (__ret == EDEADLK)
-	__throw_system_error(int(errc::resource_deadlock_would_occur));
+	__throw_system_error(static_cast<int>(errc::resource_deadlock_would_occur));
       // Errors not handled: EINVAL
       __glibcxx_assert(__ret == 0);
     }
