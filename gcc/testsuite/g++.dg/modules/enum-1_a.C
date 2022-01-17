@@ -24,7 +24,7 @@ export inline Ben func1 ()
 
 export inline Ben func2 ()
 {
-  return Ben (4);
+  return static_cast<Ben> (4);
 }
 
 // { dg-final { scan-lang-dump-times {Written enum value '::Ben::Three'} 2 module } }

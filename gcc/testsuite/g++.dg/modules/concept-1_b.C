@@ -10,4 +10,4 @@ void foo (int i, X &x)
   f1 (x); // { dg-error "no match" }
 }
 
-// { dg-regexp {[^\n]*concept-1_a.C:7:[0-9]*: error: invalid cast[^\n]*\n} }
+// { dg-regexp {[^\n]*concept-1_a.C:7:[0-9]*: error: invalid [^\n]*cast[^\n]*\n} }

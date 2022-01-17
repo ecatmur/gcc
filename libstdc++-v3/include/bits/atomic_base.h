@@ -97,13 +97,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   constexpr memory_order
   operator|(memory_order __m, __memory_order_modifier __mod)
   {
-    return memory_order(int(__m) | int(__mod));
+    return static_cast<memory_order>(static_cast<int>(__m) | int(__mod));
   }
 
   constexpr memory_order
   operator&(memory_order __m, __memory_order_modifier __mod)
   {
-    return memory_order(int(__m) & int(__mod));
+    return static_cast<memory_order>(static_cast<int>(__m) & int(__mod));
   }
 
   // Drop release ordering as per [atomics.types.operations.req]/21
@@ -117,8 +117,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   constexpr memory_order
   __cmpexch_failure_order(memory_order __m) noexcept
   {
-    return memory_order(__cmpexch_failure_order2(__m & __memory_order_mask)
-      | __memory_order_modifier(__m & __memory_order_modifier_mask));
+    return static_cast<memory_order>(__cmpexch_failure_order2(__m & __memory_order_mask)
+      | static_cast<__memory_order_modifier>(__m & __memory_order_modifier_mask));
   }
 
   constexpr bool
@@ -130,11 +130,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   _GLIBCXX_ALWAYS_INLINE void
   atomic_thread_fence(memory_order __m) noexcept
-  { __atomic_thread_fence(int(__m)); }
+  { __atomic_thread_fence(static_cast<int>(__m)); }
 
   _GLIBCXX_ALWAYS_INLINE void
   atomic_signal_fence(memory_order __m) noexcept
-  { __atomic_signal_fence(int(__m)); }
+  { __atomic_signal_fence(static_cast<int>(__m)); }
 
   /// kill_dependency
   template<typename _Tp>
@@ -209,13 +209,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     _GLIBCXX_ALWAYS_INLINE bool
     test_and_set(memory_order __m = memory_order_seq_cst) noexcept
     {
-      return __atomic_test_and_set (&_M_i, int(__m));
+      return __atomic_test_and_set (&_M_i, static_cast<int>(__m));
     }
 
     _GLIBCXX_ALWAYS_INLINE bool
     test_and_set(memory_order __m = memory_order_seq_cst) volatile noexcept
     {
-      return __atomic_test_and_set (&_M_i, int(__m));
+      return __atomic_test_and_set (&_M_i, static_cast<int>(__m));
     }
 
 #if __cplusplus > 201703L
@@ -225,7 +225,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     test(memory_order __m = memory_order_seq_cst) const noexcept
     {
       __atomic_flag_data_type __v;
-      __atomic_load(&_M_i, &__v, int(__m));
+      __atomic_load(&_M_i, &__v, static_cast<int>(__m));
       return __v == __GCC_ATOMIC_TEST_AND_SET_TRUEVAL;
     }
 
@@ -233,7 +233,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     test(memory_order __m = memory_order_seq_cst) const volatile noexcept
     {
       __atomic_flag_data_type __v;
-      __atomic_load(&_M_i, &__v, int(__m));
+      __atomic_load(&_M_i, &__v, static_cast<int>(__m));
       return __v == __GCC_ATOMIC_TEST_AND_SET_TRUEVAL;
     }
 
@@ -246,7 +246,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	= __old ? __GCC_ATOMIC_TEST_AND_SET_TRUEVAL : 0;
 
       std::__atomic_wait_address_v(&_M_i, __v,
-	  [__m, this] { return __atomic_load_n(&_M_i, int(__m)); });
+	  [__m, this] { return __atomic_load_n(&_M_i, static_cast<int>(__m)); });
     }
 
     // TODO add const volatile overload
@@ -274,7 +274,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       __glibcxx_assert(__b != memory_order_acquire);
       __glibcxx_assert(__b != memory_order_acq_rel);
 
-      __atomic_clear (&_M_i, int(__m));
+      __atomic_clear (&_M_i, static_cast<int>(__m));
     }
 
     _GLIBCXX_ALWAYS_INLINE void
@@ -286,7 +286,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       __glibcxx_assert(__b != memory_order_acquire);
       __glibcxx_assert(__b != memory_order_acq_rel);
 
-      __atomic_clear (&_M_i, int(__m));
+      __atomic_clear (&_M_i, static_cast<int>(__m));
     }
 
   private:
@@ -461,7 +461,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__b != memory_order_acq_rel);
 	__glibcxx_assert(__b != memory_order_consume);
 
-	__atomic_store_n(&_M_i, __i, int(__m));
+	__atomic_store_n(&_M_i, __i, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE void
@@ -474,7 +474,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__b != memory_order_acq_rel);
 	__glibcxx_assert(__b != memory_order_consume);
 
-	__atomic_store_n(&_M_i, __i, int(__m));
+	__atomic_store_n(&_M_i, __i, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
@@ -485,7 +485,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__b != memory_order_release);
 	__glibcxx_assert(__b != memory_order_acq_rel);
 
-	return __atomic_load_n(&_M_i, int(__m));
+	return __atomic_load_n(&_M_i, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
@@ -496,14 +496,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__b != memory_order_release);
 	__glibcxx_assert(__b != memory_order_acq_rel);
 
-	return __atomic_load_n(&_M_i, int(__m));
+	return __atomic_load_n(&_M_i, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       exchange(__int_type __i,
 	       memory_order __m = memory_order_seq_cst) noexcept
       {
-	return __atomic_exchange_n(&_M_i, __i, int(__m));
+	return __atomic_exchange_n(&_M_i, __i, static_cast<int>(__m));
       }
 
 
@@ -511,7 +511,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       exchange(__int_type __i,
 	       memory_order __m = memory_order_seq_cst) volatile noexcept
       {
-	return __atomic_exchange_n(&_M_i, __i, int(__m));
+	return __atomic_exchange_n(&_M_i, __i, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -521,7 +521,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__is_valid_cmpexch_failure_order(__m2));
 
 	return __atomic_compare_exchange_n(&_M_i, &__i1, __i2, 1,
-					   int(__m1), int(__m2));
+					   static_cast<int>(__m1), static_cast<int>(__m2));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -532,7 +532,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__is_valid_cmpexch_failure_order(__m2));
 
 	return __atomic_compare_exchange_n(&_M_i, &__i1, __i2, 1,
-					   int(__m1), int(__m2));
+					   static_cast<int>(__m1), static_cast<int>(__m2));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -558,7 +558,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__is_valid_cmpexch_failure_order(__m2));
 
 	return __atomic_compare_exchange_n(&_M_i, &__i1, __i2, 0,
-					   int(__m1), int(__m2));
+					   static_cast<int>(__m1), static_cast<int>(__m2));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -569,7 +569,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__is_valid_cmpexch_failure_order(__m2));
 
 	return __atomic_compare_exchange_n(&_M_i, &__i1, __i2, 0,
-					   int(__m1), int(__m2));
+					   static_cast<int>(__m1), static_cast<int>(__m2));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -615,52 +615,52 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_add(__int_type __i,
 		memory_order __m = memory_order_seq_cst) noexcept
-      { return __atomic_fetch_add(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_add(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_add(__int_type __i,
 		memory_order __m = memory_order_seq_cst) volatile noexcept
-      { return __atomic_fetch_add(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_add(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_sub(__int_type __i,
 		memory_order __m = memory_order_seq_cst) noexcept
-      { return __atomic_fetch_sub(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_sub(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_sub(__int_type __i,
 		memory_order __m = memory_order_seq_cst) volatile noexcept
-      { return __atomic_fetch_sub(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_sub(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_and(__int_type __i,
 		memory_order __m = memory_order_seq_cst) noexcept
-      { return __atomic_fetch_and(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_and(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_and(__int_type __i,
 		memory_order __m = memory_order_seq_cst) volatile noexcept
-      { return __atomic_fetch_and(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_and(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_or(__int_type __i,
 	       memory_order __m = memory_order_seq_cst) noexcept
-      { return __atomic_fetch_or(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_or(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_or(__int_type __i,
 	       memory_order __m = memory_order_seq_cst) volatile noexcept
-      { return __atomic_fetch_or(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_or(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_xor(__int_type __i,
 		memory_order __m = memory_order_seq_cst) noexcept
-      { return __atomic_fetch_xor(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_xor(&_M_i, __i, static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __int_type
       fetch_xor(__int_type __i,
 		memory_order __m = memory_order_seq_cst) volatile noexcept
-      { return __atomic_fetch_xor(&_M_i, __i, int(__m)); }
+      { return __atomic_fetch_xor(&_M_i, __i, static_cast<int>(__m)); }
     };
 
 
@@ -793,7 +793,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__b != memory_order_acq_rel);
 	__glibcxx_assert(__b != memory_order_consume);
 
-	__atomic_store_n(&_M_p, __p, int(__m));
+	__atomic_store_n(&_M_p, __p, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE void
@@ -806,7 +806,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__b != memory_order_acq_rel);
 	__glibcxx_assert(__b != memory_order_consume);
 
-	__atomic_store_n(&_M_p, __p, int(__m));
+	__atomic_store_n(&_M_p, __p, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE __pointer_type
@@ -817,7 +817,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__b != memory_order_release);
 	__glibcxx_assert(__b != memory_order_acq_rel);
 
-	return __atomic_load_n(&_M_p, int(__m));
+	return __atomic_load_n(&_M_p, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE __pointer_type
@@ -828,14 +828,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__b != memory_order_release);
 	__glibcxx_assert(__b != memory_order_acq_rel);
 
-	return __atomic_load_n(&_M_p, int(__m));
+	return __atomic_load_n(&_M_p, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE __pointer_type
       exchange(__pointer_type __p,
 	       memory_order __m = memory_order_seq_cst) noexcept
       {
-	return __atomic_exchange_n(&_M_p, __p, int(__m));
+	return __atomic_exchange_n(&_M_p, __p, static_cast<int>(__m));
       }
 
 
@@ -843,7 +843,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       exchange(__pointer_type __p,
 	       memory_order __m = memory_order_seq_cst) volatile noexcept
       {
-	return __atomic_exchange_n(&_M_p, __p, int(__m));
+	return __atomic_exchange_n(&_M_p, __p, static_cast<int>(__m));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -918,22 +918,22 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       _GLIBCXX_ALWAYS_INLINE __pointer_type
       fetch_add(ptrdiff_t __d,
 		memory_order __m = memory_order_seq_cst) noexcept
-      { return __atomic_fetch_add(&_M_p, _M_type_size(__d), int(__m)); }
+      { return __atomic_fetch_add(&_M_p, _M_type_size(__d), static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __pointer_type
       fetch_add(ptrdiff_t __d,
 		memory_order __m = memory_order_seq_cst) volatile noexcept
-      { return __atomic_fetch_add(&_M_p, _M_type_size(__d), int(__m)); }
+      { return __atomic_fetch_add(&_M_p, _M_type_size(__d), static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __pointer_type
       fetch_sub(ptrdiff_t __d,
 		memory_order __m = memory_order_seq_cst) noexcept
-      { return __atomic_fetch_sub(&_M_p, _M_type_size(__d), int(__m)); }
+      { return __atomic_fetch_sub(&_M_p, _M_type_size(__d), static_cast<int>(__m)); }
 
       _GLIBCXX_ALWAYS_INLINE __pointer_type
       fetch_sub(ptrdiff_t __d,
 		memory_order __m = memory_order_seq_cst) volatile noexcept
-      { return __atomic_fetch_sub(&_M_p, _M_type_size(__d), int(__m)); }
+      { return __atomic_fetch_sub(&_M_p, _M_type_size(__d), static_cast<int>(__m)); }
     };
 
 #if __cplusplus > 201703L
@@ -959,7 +959,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     template<typename _Tp>
       _GLIBCXX_ALWAYS_INLINE void
       store(_Tp* __ptr, _Val<_Tp> __t, memory_order __m) noexcept
-      { __atomic_store(__ptr, std::__addressof(__t), int(__m)); }
+      { __atomic_store(__ptr, std::__addressof(__t), static_cast<int>(__m)); }
 
     template<typename _Tp>
       _GLIBCXX_ALWAYS_INLINE _Val<_Tp>
@@ -967,7 +967,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
 	alignas(_Tp) unsigned char __buf[sizeof(_Tp)];
 	auto* __dest = reinterpret_cast<_Val<_Tp>*>(__buf);
-	__atomic_load(__ptr, __dest, int(__m));
+	__atomic_load(__ptr, __dest, static_cast<int>(__m));
 	return *__dest;
       }
 
@@ -977,7 +977,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
         alignas(_Tp) unsigned char __buf[sizeof(_Tp)];
 	auto* __dest = reinterpret_cast<_Val<_Tp>*>(__buf);
-	__atomic_exchange(__ptr, std::__addressof(__desired), __dest, int(__m));
+	__atomic_exchange(__ptr, std::__addressof(__desired), __dest, static_cast<int>(__m));
 	return *__dest;
       }
 
@@ -1004,7 +1004,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
 	return __atomic_compare_exchange(__ptr, std::__addressof(__expected),
 					 std::__addressof(__desired), false,
-					 int(__success), int(__failure));
+					 static_cast<int>(__success), static_cast<int>(__failure));
       }
 
 #if __cpp_lib_atomic_wait
@@ -1037,27 +1037,27 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     template<typename _Tp>
       _GLIBCXX_ALWAYS_INLINE _Tp
       fetch_add(_Tp* __ptr, _Diff<_Tp> __i, memory_order __m) noexcept
-      { return __atomic_fetch_add(__ptr, __i, int(__m)); }
+      { return __atomic_fetch_add(__ptr, __i, static_cast<int>(__m)); }
 
     template<typename _Tp>
       _GLIBCXX_ALWAYS_INLINE _Tp
       fetch_sub(_Tp* __ptr, _Diff<_Tp> __i, memory_order __m) noexcept
-      { return __atomic_fetch_sub(__ptr, __i, int(__m)); }
+      { return __atomic_fetch_sub(__ptr, __i, static_cast<int>(__m)); }
 
     template<typename _Tp>
       _GLIBCXX_ALWAYS_INLINE _Tp
       fetch_and(_Tp* __ptr, _Val<_Tp> __i, memory_order __m) noexcept
-      { return __atomic_fetch_and(__ptr, __i, int(__m)); }
+      { return __atomic_fetch_and(__ptr, __i, static_cast<int>(__m)); }
 
     template<typename _Tp>
       _GLIBCXX_ALWAYS_INLINE _Tp
       fetch_or(_Tp* __ptr, _Val<_Tp> __i, memory_order __m) noexcept
-      { return __atomic_fetch_or(__ptr, __i, int(__m)); }
+      { return __atomic_fetch_or(__ptr, __i, static_cast<int>(__m)); }
 
     template<typename _Tp>
       _GLIBCXX_ALWAYS_INLINE _Tp
       fetch_xor(_Tp* __ptr, _Val<_Tp> __i, memory_order __m) noexcept
-      { return __atomic_fetch_xor(__ptr, __i, int(__m)); }
+      { return __atomic_fetch_xor(__ptr, __i, static_cast<int>(__m)); }
 
     template<typename _Tp>
       _GLIBCXX_ALWAYS_INLINE _Tp

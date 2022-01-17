@@ -416,7 +416,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  _M_status._M_store_notify_all(_Status::__ready,
 					memory_order_release);
 	else if (!__ignore_failure)
-          __throw_future_error(int(future_errc::promise_already_satisfied));
+          __throw_future_error(static_cast<int>(future_errc::promise_already_satisfied));
       }
 
       // Provide a result to the shared state but delay making it ready
@@ -433,7 +433,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	call_once(_M_once, &_State_baseV2::_M_do_set, this,
 		  std::__addressof(__res), std::__addressof(__did_set));
 	if (!__did_set)
-          __throw_future_error(int(future_errc::promise_already_satisfied));
+          __throw_future_error(static_cast<int>(future_errc::promise_already_satisfied));
 	__mr->_M_shared_state = std::move(__self);
 	__mr->_M_set();
 	__mr.release();
@@ -463,7 +463,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       _M_set_retrieved_flag()
       {
 	if (_M_retrieved.test_and_set())
-	  __throw_future_error(int(future_errc::future_already_retrieved));
+	  __throw_future_error(static_cast<int>(future_errc::future_already_retrieved));
       }
 
       template<typename _Res, typename _Arg>

@@ -694,7 +694,7 @@ namespace __detail
       ~_List() = default;
 
       _Type type() const noexcept
-      { return _Type(reinterpret_cast<uintptr_t>(_M_impl.get()) & 0x3); }
+      { return static_cast<_Type>(reinterpret_cast<uintptr_t>(_M_impl.get()) & 0x3); }
 
       void type(_Type) noexcept;
 
