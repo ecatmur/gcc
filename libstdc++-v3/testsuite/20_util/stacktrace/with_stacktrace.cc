@@ -1,4 +1,6 @@
+// { dg-options "-std=gnu++23 -lstdc++_libbacktrace" }
 // { dg-do run { target c++23 } }
+// { dg-require-effective-target stacktrace }
 
 // Copyright (C) 2021-2022 Free Software Foundation, Inc.
 //
