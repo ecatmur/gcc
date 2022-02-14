@@ -52,7 +52,7 @@ void test02()
     }
   catch([[with_stacktrace]] const std::exception& e)
     {
-      st = std::current_exception_stacktrace();
+      st = std::stacktrace::from_current_exception();
     }
   std::string s = std::to_string(st);
   VERIFY(s.contains("test_throw"));
@@ -88,7 +88,7 @@ void test04()
     }
   catch([[with_stacktrace]] ...)
     {
-      st = std::current_exception_stacktrace();
+      st = std::stacktrace::from_current_exception();
     }
   std::string s = std::to_string(st);
   VERIFY(s.contains("test_throw"));
