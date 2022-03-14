@@ -382,59 +382,59 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       __int_type
       operator++() noexcept
-      { return __atomic_add_fetch(&_M_i, 1, int(memory_order_seq_cst)); }
+      { return __atomic_add_fetch(&_M_i, 1, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator++() volatile noexcept
-      { return __atomic_add_fetch(&_M_i, 1, int(memory_order_seq_cst)); }
+      { return __atomic_add_fetch(&_M_i, 1, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator--() noexcept
-      { return __atomic_sub_fetch(&_M_i, 1, int(memory_order_seq_cst)); }
+      { return __atomic_sub_fetch(&_M_i, 1, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator--() volatile noexcept
-      { return __atomic_sub_fetch(&_M_i, 1, int(memory_order_seq_cst)); }
+      { return __atomic_sub_fetch(&_M_i, 1, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator+=(__int_type __i) noexcept
-      { return __atomic_add_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_add_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator+=(__int_type __i) volatile noexcept
-      { return __atomic_add_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_add_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator-=(__int_type __i) noexcept
-      { return __atomic_sub_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_sub_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator-=(__int_type __i) volatile noexcept
-      { return __atomic_sub_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_sub_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator&=(__int_type __i) noexcept
-      { return __atomic_and_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_and_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator&=(__int_type __i) volatile noexcept
-      { return __atomic_and_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_and_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator|=(__int_type __i) noexcept
-      { return __atomic_or_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_or_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator|=(__int_type __i) volatile noexcept
-      { return __atomic_or_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_or_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator^=(__int_type __i) noexcept
-      { return __atomic_xor_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_xor_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       __int_type
       operator^=(__int_type __i) volatile noexcept
-      { return __atomic_xor_fetch(&_M_i, __i, int(memory_order_seq_cst)); }
+      { return __atomic_xor_fetch(&_M_i, __i, static_cast<int>(memory_order_seq_cst)); }
 
       bool
       is_lock_free() const noexcept
@@ -729,42 +729,42 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       __pointer_type
       operator++() noexcept
       { return __atomic_add_fetch(&_M_p, _M_type_size(1),
-				  int(memory_order_seq_cst)); }
+				  static_cast<int>(memory_order_seq_cst)); }
 
       __pointer_type
       operator++() volatile noexcept
       { return __atomic_add_fetch(&_M_p, _M_type_size(1),
-				  int(memory_order_seq_cst)); }
+				  static_cast<int>(memory_order_seq_cst)); }
 
       __pointer_type
       operator--() noexcept
       { return __atomic_sub_fetch(&_M_p, _M_type_size(1),
-				  int(memory_order_seq_cst)); }
+				  static_cast<int>(memory_order_seq_cst)); }
 
       __pointer_type
       operator--() volatile noexcept
       { return __atomic_sub_fetch(&_M_p, _M_type_size(1),
-				  int(memory_order_seq_cst)); }
+				  static_cast<int>(memory_order_seq_cst)); }
 
       __pointer_type
       operator+=(ptrdiff_t __d) noexcept
       { return __atomic_add_fetch(&_M_p, _M_type_size(__d),
-				  int(memory_order_seq_cst)); }
+				  static_cast<int>(memory_order_seq_cst)); }
 
       __pointer_type
       operator+=(ptrdiff_t __d) volatile noexcept
       { return __atomic_add_fetch(&_M_p, _M_type_size(__d),
-				  int(memory_order_seq_cst)); }
+				  static_cast<int>(memory_order_seq_cst)); }
 
       __pointer_type
       operator-=(ptrdiff_t __d) noexcept
       { return __atomic_sub_fetch(&_M_p, _M_type_size(__d),
-				  int(memory_order_seq_cst)); }
+				  static_cast<int>(memory_order_seq_cst)); }
 
       __pointer_type
       operator-=(ptrdiff_t __d) volatile noexcept
       { return __atomic_sub_fetch(&_M_p, _M_type_size(__d),
-				  int(memory_order_seq_cst)); }
+				  static_cast<int>(memory_order_seq_cst)); }
 
       bool
       is_lock_free() const noexcept
@@ -854,7 +854,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__is_valid_cmpexch_failure_order(__m2));
 
 	return __atomic_compare_exchange_n(&_M_p, &__p1, __p2, 1,
-					   int(__m1), int(__m2));
+					   static_cast<int>(__m1), static_cast<int>(__m2));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -865,7 +865,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__is_valid_cmpexch_failure_order(__m2));
 
 	return __atomic_compare_exchange_n(&_M_p, &__p1, __p2, 1,
-					   int(__m1), int(__m2));
+					   static_cast<int>(__m1), static_cast<int>(__m2));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -876,7 +876,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__is_valid_cmpexch_failure_order(__m2));
 
 	return __atomic_compare_exchange_n(&_M_p, &__p1, __p2, 0,
-					   int(__m1), int(__m2));
+					   static_cast<int>(__m1), static_cast<int>(__m2));
       }
 
       _GLIBCXX_ALWAYS_INLINE bool
@@ -887,7 +887,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	__glibcxx_assert(__is_valid_cmpexch_failure_order(__m2));
 
 	return __atomic_compare_exchange_n(&_M_p, &__p1, __p2, 0,
-					   int(__m1), int(__m2));
+					   static_cast<int>(__m1), static_cast<int>(__m2));
       }
 
 #if __cpp_lib_atomic_wait
@@ -991,7 +991,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
 	return __atomic_compare_exchange(__ptr, std::__addressof(__expected),
 					 std::__addressof(__desired), true,
-					 int(__success), int(__failure));
+					 static_cast<int>(__success), static_cast<int>(__failure));
       }
 
     template<typename _Tp>

@@ -268,13 +268,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       void
       store(_Tp __i, memory_order __m = memory_order_seq_cst) noexcept
       {
-	__atomic_store(std::__addressof(_M_i), std::__addressof(__i), int(__m));
+	__atomic_store(std::__addressof(_M_i), std::__addressof(__i), static_cast<int>(__m));
       }
 
       void
       store(_Tp __i, memory_order __m = memory_order_seq_cst) volatile noexcept
       {
-	__atomic_store(std::__addressof(_M_i), std::__addressof(__i), int(__m));
+	__atomic_store(std::__addressof(_M_i), std::__addressof(__i), static_cast<int>(__m));
       }
 
       _Tp
@@ -282,7 +282,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
 	alignas(_Tp) unsigned char __buf[sizeof(_Tp)];
 	_Tp* __ptr = reinterpret_cast<_Tp*>(__buf);
-	__atomic_load(std::__addressof(_M_i), __ptr, int(__m));
+	__atomic_load(std::__addressof(_M_i), __ptr, static_cast<int>(__m));
 	return *__ptr;
       }
 
@@ -291,7 +291,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
         alignas(_Tp) unsigned char __buf[sizeof(_Tp)];
 	_Tp* __ptr = reinterpret_cast<_Tp*>(__buf);
-	__atomic_load(std::__addressof(_M_i), __ptr, int(__m));
+	__atomic_load(std::__addressof(_M_i), __ptr, static_cast<int>(__m));
 	return *__ptr;
       }
 
@@ -301,7 +301,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
         alignas(_Tp) unsigned char __buf[sizeof(_Tp)];
 	_Tp* __ptr = reinterpret_cast<_Tp*>(__buf);
 	__atomic_exchange(std::__addressof(_M_i), std::__addressof(__i),
-			  __ptr, int(__m));
+			  __ptr, static_cast<int>(__m));
 	return *__ptr;
       }
 
@@ -312,7 +312,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
         alignas(_Tp) unsigned char __buf[sizeof(_Tp)];
 	_Tp* __ptr = reinterpret_cast<_Tp*>(__buf);
 	__atomic_exchange(std::__addressof(_M_i), std::__addressof(__i),
-			  __ptr, int(__m));
+			  __ptr, static_cast<int>(__m));
 	return *__ptr;
       }
 
@@ -325,7 +325,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	return __atomic_compare_exchange(std::__addressof(_M_i),
 					 std::__addressof(__e),
 					 std::__addressof(__i),
-					 true, int(__s), int(__f));
+					 true, static_cast<int>(__s), static_cast<int>(__f));
       }
 
       bool
@@ -337,7 +337,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	return __atomic_compare_exchange(std::__addressof(_M_i),
 					 std::__addressof(__e),
 					 std::__addressof(__i),
-					 true, int(__s), int(__f));
+					 true, static_cast<int>(__s), static_cast<int>(__f));
       }
 
       bool
@@ -361,7 +361,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	return __atomic_compare_exchange(std::__addressof(_M_i),
 					 std::__addressof(__e),
 					 std::__addressof(__i),
-					 false, int(__s), int(__f));
+					 false, static_cast<int>(__s), static_cast<int>(__f));
       }
 
       bool
@@ -373,7 +373,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	return __atomic_compare_exchange(std::__addressof(_M_i),
 					 std::__addressof(__e),
 					 std::__addressof(__i),
-					 false, int(__s), int(__f));
+					 false, static_cast<int>(__s), static_cast<int>(__f));
       }
 
       bool
