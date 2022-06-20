@@ -1644,6 +1644,9 @@ gfc_simplify_btest (gfc_expr *e, gfc_expr *bit)
   if (e->expr_type != EXPR_CONSTANT || bit->expr_type != EXPR_CONSTANT)
     return NULL;
 
+  if (!gfc_check_bitfcn (e, bit))
+    return &gfc_bad_expr;
+
   if (gfc_extract_int (bit, &b) || b < 0)
     return gfc_get_logical_expr (gfc_default_logical_kind, &e->where, false);
 
@@ -2134,6 +2137,7 @@ gfc_simplify_cshift (gfc_expr *array, gfc_expr *shift, gfc_expr *dim)
 
   resultvec = XCNEWVEC (gfc_expr *, arraysize);
 
+  sstride[0] = 0;
   extent[0] = 1;
   count[0] = 0;
 
@@ -3352,6 +3356,9 @@ gfc_simplify_ibclr (gfc_expr *x, gfc_expr *y)
   if (x->expr_type != EXPR_CONSTANT || y->expr_type != EXPR_CONSTANT)
     return NULL;
 
+  if (!gfc_check_bitfcn (x, y))
+    return &gfc_bad_expr;
+
   gfc_extract_int (y, &pos);
 
   k = gfc_validate_kind (x->ts.type, x->ts.kind, false);
@@ -3382,6 +3389,9 @@ gfc_simplify_ibits (gfc_expr *x, gfc_expr *y, gfc_expr *z)
       || y->expr_type != EXPR_CONSTANT
       || z->expr_type != EXPR_CONSTANT)
     return NULL;
+
+  if (!gfc_check_ibits (x, y, z))
+    return &gfc_bad_expr;
 
   gfc_extract_int (y, &pos);
   gfc_extract_int (z, &len);
@@ -3436,6 +3446,9 @@ gfc_simplify_ibset (gfc_expr *x, gfc_expr *y)
 
   if (x->expr_type != EXPR_CONSTANT || y->expr_type != EXPR_CONSTANT)
     return NULL;
+
+  if (!gfc_check_bitfcn (x, y))
+    return &gfc_bad_expr;
 
   gfc_extract_int (y, &pos);
 

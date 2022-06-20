@@ -122,7 +122,7 @@ struct plugin_symtab
 struct plugin_objfile
 {
   int found;
-  int offload;
+  bool offload;
   simple_object_read *objfile;
   struct plugin_symtab *out;
   const struct ld_plugin_input_file *file;
@@ -136,6 +136,7 @@ struct plugin_file_info
   void *handle;
   struct plugin_symtab symtab;
   struct plugin_symtab conflicts;
+  bool skip_file;
 };
 
 /* List item with name of the file with offloading.  */
@@ -159,7 +160,7 @@ enum symbol_style
 static char *arguments_file_name;
 static ld_plugin_register_claim_file register_claim_file;
 static ld_plugin_register_all_symbols_read register_all_symbols_read;
-static ld_plugin_get_symbols get_symbols, get_symbols_v2;
+static ld_plugin_get_symbols get_symbols, get_symbols_v2, get_symbols_v3;
 static ld_plugin_register_cleanup register_cleanup;
 static ld_plugin_add_input_file add_input_file;
 static ld_plugin_add_input_library add_input_library;
@@ -205,7 +206,7 @@ static const char *link_output_name = NULL;
 
 /* This indicates link_output_name already contains the dot of the
    suffix, so we can skip it in extensions.  */
-static int skip_in_suffix = 0;
+static bool skip_in_suffix = false;
 
 /* The version of gold being used, or -1 if not gold.  The number is
    MAJOR * 100 + MINOR.  */
@@ -547,14 +548,12 @@ free_symtab (struct plugin_symtab *symtab)
 static void
 write_resolution (void)
 {
-  unsigned int i;
+  unsigned int i, included_files = 0;
   FILE *f;
 
   check (resolution_file, LDPL_FATAL, "resolution file not specified");
   f = fopen (resolution_file, "w");
   check (f, LDPL_FATAL, "could not open file");
-
-  fprintf (f, "%d\n", num_claimed_files);
 
   for (i = 0; i < num_claimed_files; i++)
     {
@@ -563,13 +562,38 @@ write_resolution (void)
       struct ld_plugin_symbol *syms = symtab->syms;
 
       /* Version 2 of API supports IRONLY_EXP resolution that is
-         accepted by GCC-4.7 and newer.  */
-      if (get_symbols_v2)
+	 accepted by GCC-4.7 and newer.
+	 Version 3 can return LDPS_NO_SYMS that means the object
+	 will not be used at all.  */
+      if (get_symbols_v3)
+	{
+	  enum ld_plugin_status status
+	    = get_symbols_v3 (info->handle, symtab->nsyms, syms);
+	  if (status == LDPS_NO_SYMS)
+	    {
+	      info->skip_file = true;
+	      continue;
+	    }
+	}
+      else if (get_symbols_v2)
         get_symbols_v2 (info->handle, symtab->nsyms, syms);
       else
         get_symbols (info->handle, symtab->nsyms, syms);
 
+      ++included_files;
+
       finish_conflict_resolution (symtab, &info->conflicts);
+    }
+
+  fprintf (f, "%d\n", included_files);
+
+  for (i = 0; i < num_claimed_files; i++)
+    {
+      struct plugin_file_info *info = &claimed_files[i];
+      struct plugin_symtab *symtab = &info->symtab;
+
+      if (info->skip_file)
+	continue;
 
       fprintf (f, "%s %d\n", info->name, symtab->nsyms + info->conflicts.nsyms);
       dump_symtab (f, symtab);
@@ -636,7 +660,8 @@ exec_lto_wrapper (char *argv[])
   /* Write argv to a file to avoid a command line that is too long
      Save the file locally on save-temps.  */
   const char *suffix = ".lto_wrapper_args";
-  suffix += skip_in_suffix;
+  if (skip_in_suffix)
+    suffix++;
   if (save_temps && link_output_name)
     arguments_file_name = concat (link_output_name, suffix, NULL);
   else
@@ -832,7 +857,8 @@ all_symbols_read_handler (void)
     {
       struct plugin_file_info *info = &claimed_files[i];
 
-      *lto_arg_ptr++ = info->name;
+      if (!info->skip_file)
+	*lto_arg_ptr++ = info->name;
     }
 
   *lto_arg_ptr++ = NULL;
@@ -1139,7 +1165,7 @@ process_offload_section (void *data, const char *name, off_t offset, off_t len)
   if (startswith (name, ".gnu.offload_lto_.opts"))
     {
       struct plugin_objfile *obj = (struct plugin_objfile *) data;
-      obj->offload = 1;
+      obj->offload = true;
       return 0;
     }
 
@@ -1182,7 +1208,7 @@ claim_file_handler (const struct ld_plugin_input_file *file, int *claimed)
   *claimed = 0;
   obj.file = file;
   obj.found = 0;
-  obj.offload = 0;
+  obj.offload = false;
   obj.out = &lto_file.symtab;
   errmsg = NULL;
   obj.objfile = simple_object_start_read (file->fd, file->offset, LTO_SEGMENT_NAME,
@@ -1220,7 +1246,7 @@ claim_file_handler (const struct ld_plugin_input_file *file, int *claimed)
     simple_object_find_sections (obj.objfile, process_offload_section,
 				 &obj, &err);
 
-  if (obj.found == 0 && obj.offload == 0)
+  if (obj.found == 0 && !obj.offload)
     goto err;
 
   if (obj.found > 1)
@@ -1257,10 +1283,10 @@ claim_file_handler (const struct ld_plugin_input_file *file, int *claimed)
   /* If this is an LTO file without offload, and it is the first LTO file, save
      the pointer to the last offload file in the list.  Further offload LTO
      files will be inserted after it, if any.  */
-  if (*claimed && obj.offload == 0 && offload_files_last_lto == NULL)
+  if (*claimed && !obj.offload && offload_files_last_lto == NULL)
     offload_files_last_lto = offload_files_last;
 
-  if (obj.offload == 1)
+  if (obj.offload)
     {
       /* Add file to the list.  The order must be exactly the same as the final
 	 order after recompilation and linking, otherwise host and target tables
@@ -1409,6 +1435,9 @@ onload (struct ld_plugin_tv *tv)
 	case LDPT_REGISTER_ALL_SYMBOLS_READ_HOOK:
 	  register_all_symbols_read = p->tv_u.tv_register_all_symbols_read;
 	  break;
+	case LDPT_GET_SYMBOLS_V3:
+	  get_symbols_v3 = p->tv_u.tv_get_symbols;
+	  break;
 	case LDPT_GET_SYMBOLS_V2:
 	  get_symbols_v2 = p->tv_u.tv_get_symbols;
 	  break;
@@ -1547,7 +1576,7 @@ onload (struct ld_plugin_tv *tv)
 	  assert (escapes == 0);
 	  assert (ticks == oddticks);
 	  assert (q - link_output_name == len - 1);
-	  skip_in_suffix = 1;
+	  skip_in_suffix = true;
 	}
     }
 
