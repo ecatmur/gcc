@@ -7746,7 +7746,10 @@ check_for_casting_away_constness (location_t loc, tree src_type,
 {
   /* C-style casts are allowed to cast away constness.  With
      WARN_CAST_QUAL, we still want to issue a warning.  */
-  if (cast == CAST_EXPR && !warn_cast_qual)
+  if (cast == CAST_EXPR
+      && !(warn_cast_qual
+	   || (complain & tf_functional_cast
+	       && warn_functional_cast >= 2)))
     return false;
   
   if (!casts_away_constness (src_type, dest_type, complain))
@@ -7756,9 +7759,15 @@ check_for_casting_away_constness (location_t loc, tree src_type,
     {
     case CAST_EXPR:
       if (complain & tf_warning)
-	warning_at (loc, OPT_Wcast_qual,
-		    "cast from type %qT to type %qT casts away qualifiers",
-		    src_type, dest_type);
+	{
+	  if (warn_cast_qual)
+	    warning_at (loc, OPT_Wcast_qual, "cast from type %qT to type "
+			"%qT casts away qualifiers", src_type, dest_type);
+	  else
+	    warning_at (loc, OPT_Wfunctional_cast, "functional cast from "
+			"type %qT to type %qT casts away qualifiers",
+			src_type, dest_type);
+	}
       return false;
 
     case STATIC_CAST_EXPR:
@@ -7811,6 +7820,21 @@ maybe_warn_about_cast_ignoring_quals (location_t loc, tree type,
 		"type qualifiers ignored on cast result type");
 }
 
+/* Warn if the functional cast resolves to a static_cast that does not
+   potentially change the meaning of the program from
+   direct-initialization.  */
+static void
+maybe_warn_functional_cast_4 (location_t loc, tree src_type,
+			      tree dest_type, tsubst_flags_t complain)
+{
+  if (warn_functional_cast >= 4
+      && complain & tf_warning
+      && complain & tf_functional_cast)
+    warning_at (loc, OPT_Wfunctional_cast, "functional cast from type %qT "
+		"to type %qT cannot be accomplished as "
+		"direct-initialization", intype, type);
+}
+
 /* Convert EXPR (an expression with pointer-to-member type) to TYPE
    (another pointer-to-member type in the same hierarchy) and return
    the converted expression.  If ALLOW_INVERSE_P is permitted, a
@@ -7857,49 +7881,6 @@ convert_ptrmem (tree type, tree expr, bool allow_inverse_p,
   else
     return build_ptrmemfunc (TYPE_PTRMEMFUNC_FN_TYPE (type), expr,
 			     allow_inverse_p, c_cast_p, complain);
-}
-
-static tree
-build_direct_init_cast (tree type, tree expr, bool c_cast_p,
-			tsubst_flags_t complain)
-{
-  tree result = perform_direct_initialization_if_possible (type, expr,
-							   c_cast_p, complain);
-  /* P1975 allows static_cast<Aggr>(42), as well as static_cast<T[5]>(42),
-     which initialize the first element of the aggregate.  We need to handle
-     the array case specifically.  */
-  if (result == NULL_TREE
-      && cxx_dialect >= cxx20
-      && TREE_CODE (type) == ARRAY_TYPE)
-    {
-      /* Create { EXPR } and perform direct-initialization from it.  */
-      tree e = build_constructor_single (init_list_type_node, NULL_TREE, expr);
-      CONSTRUCTOR_IS_DIRECT_INIT (e) = true;
-      CONSTRUCTOR_IS_PAREN_INIT (e) = true;
-      result = perform_direct_initialization_if_possible (type, e, c_cast_p,
-							  complain);
-    }
-  if (result)
-    {
-      if (processing_template_decl)
-	return expr;
-
-      result = convert_from_reference (result);
-
-      /* [expr.static.cast]
-
-	 If T is a reference type, the result is an lvalue; otherwise,
-	 the result is an rvalue.  */
-      if (!TYPE_REF_P (type))
-	{
-	  result = rvalue (result);
-
-	  if (result == expr && SCALAR_TYPE_P (type))
-	    /* Leave some record of the cast.  */
-	    result = build_nop (type, expr);
-	}
-    }
-  return result;
 }
 
 /* Perform a static_cast from EXPR to TYPE.  When C_CAST_P is true,
@@ -7965,6 +7946,13 @@ build_static_cast_1 (location_t loc, tree type, tree expr, bool c_cast_p,
       if (processing_template_decl)
 	return expr;
 
+      if (warn_functional_cast >= 3
+	  && complain & tf_warning
+	  && complain & tf_functional_cast)
+	warning_at (loc, OPT_Wfunctional_cast, "functional cast from type "
+		    "%qT to type %qT interpreted as downcast",
+		    intype, type);
+
       /* There is a standard conversion from "D*" to "B*" even if "B"
 	 is ambiguous or inaccessible.  If this is really a
 	 static_cast, then we check both for inaccessibility and
@@ -8025,6 +8013,9 @@ build_static_cast_1 (location_t loc, tree type, tree expr, bool c_cast_p,
     {
       if (processing_template_decl)
 	return expr;
+
+      maybe_warn_functional_cast_4 (loc, intype, type, complain);
+
       if (clk == clk_ordinary)
 	{
 	  /* Handle the (non-bit-field) lvalue case here by casting to
@@ -8054,7 +8045,10 @@ build_static_cast_1 (location_t loc, tree type, tree expr, bool c_cast_p,
 
      Any expression can be explicitly converted to type cv void.  */
   if (VOID_TYPE_P (type))
-    return convert_to_void (expr, ICV_CAST, complain);
+    {
+      maybe_warn_functional_cast_4 (loc, intype, type, complain);
+      return convert_to_void (expr, ICV_CAST, complain);
+    }
 
   /* [class.abstract]
      An abstract class shall not be used ... as the type of an explicit
@@ -8068,9 +8062,44 @@ build_static_cast_1 (location_t loc, tree type, tree expr, bool c_cast_p,
      static_cast of the form static_cast<T>(e) if the declaration T
      t(e);" is well-formed, for some invented temporary variable
      t.  */
-  result = build_direct_init_cast(type, expr, c_cast_p, complain);
+  result = perform_direct_initialization_if_possible (type, expr,
+						      c_cast_p, complain);
+  /* P1975 allows static_cast<Aggr>(42), as well as static_cast<T[5]>(42),
+     which initialize the first element of the aggregate.  We need to handle
+     the array case specifically.  */
+  if (result == NULL_TREE
+      && cxx_dialect >= cxx20
+      && TREE_CODE (type) == ARRAY_TYPE)
+    {
+      /* Create { EXPR } and perform direct-initialization from it.  */
+      tree e = build_constructor_single (init_list_type_node, NULL_TREE, expr);
+      CONSTRUCTOR_IS_DIRECT_INIT (e) = true;
+      CONSTRUCTOR_IS_PAREN_INIT (e) = true;
+      result = perform_direct_initialization_if_possible (type, e, c_cast_p,
+							  complain);
+    }
   if (result)
-    return result;
+    {
+      if (processing_template_decl)
+	return expr;
+
+      result = convert_from_reference (result);
+
+      /* [expr.static.cast]
+
+	 If T is a reference type, the result is an lvalue; otherwise,
+	 the result is an rvalue.  */
+      if (!TYPE_REF_P (type))
+	{
+	  result = rvalue (result);
+
+	  if (result == expr && SCALAR_TYPE_P (type))
+	    /* Leave some record of the cast.  */
+	    result = build_nop (type, expr);
+	}
+      return result;
+    }
+  maybe_warn_functional_cast_4 (loc, intype, type, complain);
 
   /* [expr.static.cast]
 
@@ -8816,16 +8845,6 @@ cp_build_c_cast (location_t loc, tree type, tree expr,
       && TREE_TYPE (value) == TREE_TYPE (TREE_OPERAND (value, 0)))
     value = TREE_OPERAND (value, 0);
 
-  if (cxx_dialect >= cxx23 && (complain & tf_functional_cast))
-    {
-      result = build_direct_init_cast(type, expr, /*c_cast_p*/false, complain);
-      if (result)
-	return result;
-      if (complain & tf_error)
-	error_at (loc, "cannot perform functional cast as direct-initialization");
-      return error_mark_node;
-    }
-
   if (TREE_CODE (type) == ARRAY_TYPE)
     {
       /* Allow casting from T1* to T2[] because Cfront allows it.
@@ -8865,7 +8884,7 @@ cp_build_c_cast (location_t loc, tree type, tree expr,
 		"cast to pointer from integer of different size");
 
   /* A C-style cast can be a const_cast.  */
-  result = build_const_cast_1 (loc, type, value, complain & tf_warning,
+  result = build_const_cast_1 (loc, type, value, complain & ~tf_error,
 			       &valid_p);
   if (valid_p)
     {
@@ -8882,8 +8901,17 @@ cp_build_c_cast (location_t loc, tree type, tree expr,
 				&valid_p, complain);
   /* Or a reinterpret_cast.  */
   if (!valid_p)
-    result = build_reinterpret_cast_1 (loc, type, value, /*c_cast_p=*/true,
-				       &valid_p, complain);
+    {
+      result = (build_reinterpret_cast_1
+		(loc, type, value, /*c_cast_p=*/true, &valid_p, complain));
+      if (valid_p
+	  && warn_functional_cast >= 1
+	  && complain & tf_warning
+	  && complain & tf_functional_cast)
+	warning_at (loc, OPT_Wfunctional_cast, "functional cast from type "
+		    "%qT to type %qT interpreted as %<reinterpret_cast%>",
+		    intype, type);
+    }
   /* The static_cast or reinterpret_cast may be followed by a
      const_cast.  */
   if (valid_p
