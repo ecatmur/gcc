@@ -7764,8 +7764,8 @@ check_for_casting_away_constness (location_t loc, tree src_type,
 	    warning_at (loc, OPT_Wcast_qual, "cast from type %qT to type "
 			"%qT casts away qualifiers", src_type, dest_type);
 	  else
-	    warning_at (loc, OPT_Wfunctional_cast, "functional cast from "
-			"type %qT to type %qT casts away qualifiers",
+	    warning_at (loc, OPT_Wfunctional_cast_, "functional cast "
+			"from type %qT to type %qT casts away qualifiers",
 			src_type, dest_type);
 	}
       return false;
@@ -7830,9 +7830,9 @@ maybe_warn_functional_cast_4 (location_t loc, tree src_type,
   if (warn_functional_cast >= 4
       && complain & tf_warning
       && complain & tf_functional_cast)
-    warning_at (loc, OPT_Wfunctional_cast, "functional cast from type %qT "
-		"to type %qT cannot be accomplished as "
-		"direct-initialization", intype, type);
+    warning_at (loc, OPT_Wfunctional_cast_, "functional cast from type "
+		"%qT to type %qT cannot be accomplished as "
+		"direct-initialization", src_type, dest_type);
 }
 
 /* Convert EXPR (an expression with pointer-to-member type) to TYPE
@@ -7949,8 +7949,8 @@ build_static_cast_1 (location_t loc, tree type, tree expr, bool c_cast_p,
       if (warn_functional_cast >= 3
 	  && complain & tf_warning
 	  && complain & tf_functional_cast)
-	warning_at (loc, OPT_Wfunctional_cast, "functional cast from type "
-		    "%qT to type %qT interpreted as downcast",
+	warning_at (loc, OPT_Wfunctional_cast_, "functional cast from "
+		    "type %qT to type %qT interpreted as downcast",
 		    intype, type);
 
       /* There is a standard conversion from "D*" to "B*" even if "B"
@@ -8908,9 +8908,9 @@ cp_build_c_cast (location_t loc, tree type, tree expr,
 	  && warn_functional_cast >= 1
 	  && complain & tf_warning
 	  && complain & tf_functional_cast)
-	warning_at (loc, OPT_Wfunctional_cast, "functional cast from type "
-		    "%qT to type %qT interpreted as %<reinterpret_cast%>",
-		    intype, type);
+	warning_at (loc, OPT_Wfunctional_cast_, "functional cast from "
+		    "type %qT to type %qT interpreted as "
+		    "%<reinterpret_cast%>", TREE_TYPE (expr), type);
     }
   /* The static_cast or reinterpret_cast may be followed by a
      const_cast.  */
