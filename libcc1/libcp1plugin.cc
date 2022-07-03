@@ -2901,6 +2901,12 @@ plugin_build_unary_type_expr (cc1_plugin::connection *self,
   return convert_out (ctx->preserve (result));
 }
 
+static tree cp_build_c_cast(location_t loc, tree type, tree expr,
+			    tsubst_flags_t complain)
+{
+    return cp_build_c_cast(UNKNOWN_LOCATION, loc, type, expr, complain);
+}
+
 gcc_expr
 plugin_build_cast_expr (cc1_plugin::connection *self,
 			const char *binary_op,
@@ -3000,7 +3006,7 @@ plugin_build_expression_list_expr (cc1_plugin::connection *self,
     case CHARS2 ('c', 'v'): // conversion with parenthesized expression list
       gcc_assert (TYPE_P (type));
       args = args_to_tree_list (values_in);
-      result = build_functional_cast (input_location, type, args, tf_error);
+      result = build_functional_cast (UNKNOWN_LOCATION, input_location, type, args, tf_error);
       break;
 
     case CHARS2 ('t', 'l'): // conversion with braced expression list

@@ -20318,7 +20318,7 @@ tsubst_copy_and_build (tree t,
 	  case CAST_EXPR:
 	    if (FUNCTIONAL_CAST_P (t))
 	      complain |= tf_functional_cast;
-	    r = build_functional_cast (input_location, type, op, complain);
+	    r = build_functional_cast (UNKNOWN_LOCATION, input_location, type, op, complain);
 	    break;
 	  case REINTERPRET_CAST_EXPR:
 	    r = build_reinterpret_cast (input_location, type, op, complain);

@@ -31988,7 +31988,7 @@ cp_parser_functional_cast (cp_parser* parser, tree type)
      finishing at the closing paren.  */
   location_t combined_loc = make_location (start_loc, start_loc,
 					   parser->lexer);
-  cast = build_functional_cast (combined_loc, type, expression_list,
+  cast = build_functional_cast (start_loc, combined_loc, type, expression_list,
 				tf_functional_cast | tf_warning_or_error);
   
   /* [expr.const]/1: In an integral constant expression "only type

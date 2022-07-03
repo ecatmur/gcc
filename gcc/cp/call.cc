@@ -7504,7 +7504,7 @@ build_op_delete_call (enum tree_code code, tree addr, tree size,
 	      rtype = cv_unqualified (rtype);
 	      rtype = TYPE_POINTER_TO (rtype);
 	      addr = cp_convert (rtype, oaddr, complain);
-	      destroying = build_functional_cast (input_location,
+	      destroying = build_functional_cast (UNKNOWN_LOCATION, input_location,
 						  destroying, NULL_TREE,
 						  complain);
 	    }
@@ -10930,7 +10930,7 @@ build_new_method_call (tree instance, tree fns, vec<tree, va_gc> **args,
 		     basetype, name))
 	inform (input_location, "for a function-style cast, remove the "
 		"redundant %<::%D%>", name);
-      call = build_functional_cast (input_location, basetype,
+      call = build_functional_cast (UNKNOWN_LOCATION, input_location, basetype,
 				    build_tree_list_vec (user_args),
 				    complain);
       return call;
