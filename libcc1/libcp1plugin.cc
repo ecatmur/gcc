@@ -1,4 +1,4 @@
-/ * Library interface to C++ front end.
+/* Library interface to C++ front end.
    Copyright (C) 2014-2022 Free Software Foundation, Inc.
 
    This file is part of GCC.  As it interacts with GDB through libcc1,
