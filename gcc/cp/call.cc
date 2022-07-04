@@ -7504,7 +7504,8 @@ build_op_delete_call (enum tree_code code, tree addr, tree size,
 	      rtype = cv_unqualified (rtype);
 	      rtype = TYPE_POINTER_TO (rtype);
 	      addr = cp_convert (rtype, oaddr, complain);
-	      destroying = build_functional_cast (UNKNOWN_LOCATION, input_location,
+	      destroying = build_functional_cast (UNKNOWN_LOCATION,
+						  input_location,
 						  destroying, NULL_TREE,
 						  complain);
 	    }

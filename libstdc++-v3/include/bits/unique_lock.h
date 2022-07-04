@@ -133,9 +133,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       lock()
       {
 	if (!_M_device)
-	  __throw_system_error(static_cast<int>(errc::operation_not_permitted));
+	  __throw_system_error (static_cast<int>
+				(errc::operation_not_permitted));
 	else if (_M_owns)
-	  __throw_system_error(static_cast<int>(errc::resource_deadlock_would_occur));
+	  __throw_system_error (static_cast<int>
+				(errc::resource_deadlock_would_occur));
 	else
 	  {
 	    _M_device->lock();
@@ -147,9 +149,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       try_lock()
       {
 	if (!_M_device)
-	  __throw_system_error(static_cast<int>(errc::operation_not_permitted));
+	  __throw_system_error (static_cast<int>
+				(errc::operation_not_permitted));
 	else if (_M_owns)
-	  __throw_system_error(static_cast<int>(errc::resource_deadlock_would_occur));
+	  __throw_system_error (static_cast<int>
+				(errc::resource_deadlock_would_occur));
 	else
 	  {
 	    _M_owns = _M_device->try_lock();
@@ -162,9 +166,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	try_lock_until(const chrono::time_point<_Clock, _Duration>& __atime)
 	{
 	  if (!_M_device)
-	    __throw_system_error(static_cast<int>(errc::operation_not_permitted));
+	    __throw_system_error (static_cast<int>
+				  (errc::operation_not_permitted));
 	  else if (_M_owns)
-	    __throw_system_error(static_cast<int>(errc::resource_deadlock_would_occur));
+	    __throw_system_error (static_cast<int>
+				  (errc::resource_deadlock_would_occur));
 	  else
 	    {
 	      _M_owns = _M_device->try_lock_until(__atime);
@@ -177,9 +183,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	try_lock_for(const chrono::duration<_Rep, _Period>& __rtime)
 	{
 	  if (!_M_device)
-	    __throw_system_error(static_cast<int>(errc::operation_not_permitted));
+	    __throw_system_error (static_cast<int>
+				  (errc::operation_not_permitted));
 	  else if (_M_owns)
-	    __throw_system_error(static_cast<int>(errc::resource_deadlock_would_occur));
+	    __throw_system_error (static_cast<int>
+				  (errc::resource_deadlock_would_occur));
 	  else
 	    {
 	      _M_owns = _M_device->try_lock_for(__rtime);
@@ -191,7 +199,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       unlock()
       {
 	if (!_M_owns)
-	  __throw_system_error(static_cast<int>(errc::operation_not_permitted));
+	  __throw_system_error (static_cast<int>
+				(errc::operation_not_permitted));
 	else if (_M_device)
 	  {
 	    _M_device->unlock();

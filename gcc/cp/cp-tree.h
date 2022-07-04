@@ -8023,8 +8023,8 @@ extern tree build_const_cast			(location_t, tree, tree,
 extern tree build_c_cast			(location_t, tree, tree);
 extern cp_expr build_c_cast			(location_t loc, tree type,
 						 cp_expr expr);
-extern tree cp_build_c_cast			(location_t, location_t, tree, tree,
-						 tsubst_flags_t);
+extern tree cp_build_c_cast			(location_t, location_t, tree,
+						 tree, tsubst_flags_t);
 extern cp_expr build_x_modify_expr		(location_t, tree,
 						 enum tree_code, tree,
 						 tree, tsubst_flags_t);
@@ -8162,8 +8162,8 @@ extern tree build_scoped_ref			(tree, tree, tree *);
 extern tree build_x_arrow			(location_t, tree,
 						 tsubst_flags_t);
 extern tree build_m_component_ref		(tree, tree, tsubst_flags_t);
-extern tree build_functional_cast		(location_t, location_t, tree, tree,
-						 tsubst_flags_t);
+extern tree build_functional_cast		(location_t, location_t, tree,
+						 tree, tsubst_flags_t);
 extern tree add_exception_specifier		(tree, tree, tsubst_flags_t);
 extern tree merge_exception_specifiers		(tree, tree);
 

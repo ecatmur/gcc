@@ -7434,7 +7434,8 @@ check_initializer (tree decl, tree init, int flags, vec<tree, va_gc> **cleanups)
 		new_init = build_cplus_new (type, init_code, tf_none);
 	      else if (CLASS_TYPE_P (type)
 		       && (!init || TREE_CODE (init) == TREE_LIST))
-		new_init = build_functional_cast (UNKNOWN_LOCATION, input_location, type,
+		new_init = build_functional_cast (UNKNOWN_LOCATION,
+						  input_location, type,
 						  init, tf_none);
 	      if (new_init)
 		{

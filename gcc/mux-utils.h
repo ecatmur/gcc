@@ -190,7 +190,8 @@ pointer_mux<T1, T2>::second_or_null () const
   // result can be reused as the pointer and so that all computation can
   // happen before a branch on null.  This reduces the number of branches
   // needed for loops.
-  return (reinterpret_cast<uintptr_t> (m_ptr) - 1) & 1 ? nullptr : known_second ();
+  return ((reinterpret_cast<uintptr_t> (m_ptr) - 1) & 1 ? nullptr
+	  : known_second ());
 }
 
 template<typename T1, typename T2>

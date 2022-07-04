@@ -7741,8 +7741,8 @@ cp_build_compound_expr (tree lhs, tree rhs, tsubst_flags_t complain)
 
 static bool
 check_for_casting_away_constness (location_t loc, tree src_type,
-				  location_t type_loc, tree dest_type, enum tree_code cast,
-				  tsubst_flags_t complain)
+				  location_t type_loc, tree dest_type,
+				  enum tree_code cast, tsubst_flags_t complain)
 {
   /* C-style casts are allowed to cast away constness.  With
      WARN_CAST_QUAL, we still want to issue a warning.  */
@@ -7880,8 +7880,8 @@ convert_ptrmem (tree type, tree expr, bool allow_inverse_p,
    indicate whether or not the cast was valid.  */
 
 static tree
-build_static_cast_1 (location_t type_loc, location_t loc, tree type, tree expr, bool* c_cast_p,
-		     bool *valid_p, tsubst_flags_t complain)
+build_static_cast_1 (location_t type_loc, location_t loc, tree type, tree expr,
+		     bool* c_cast_p, bool *valid_p, tsubst_flags_t complain)
 {
   tree intype;
   tree result;
@@ -8273,8 +8273,8 @@ build_static_cast (location_t loc, tree type, tree oexpr,
       && TREE_TYPE (expr) == TREE_TYPE (TREE_OPERAND (expr, 0)))
     expr = TREE_OPERAND (expr, 0);
 
-  result = build_static_cast_1 (UNKNOWN_LOCATION, loc, type, expr, /*c_cast_p=*/NULL,
-				&valid_p, complain);
+  result = build_static_cast_1 (UNKNOWN_LOCATION, loc, type, expr,
+				/*c_cast_p=*/NULL, &valid_p, complain);
   if (valid_p)
     {
       if (result != error_mark_node)
@@ -8519,8 +8519,8 @@ build_reinterpret_cast_1 (location_t loc, tree type, tree expr,
 	   || (TYPE_PTROBV_P (type) && TYPE_PTROBV_P (intype)))
     {
       if (!c_cast_p
-	  && check_for_casting_away_constness (loc, intype, UNKNOWN_LOCATION, type,
-					       REINTERPRET_CAST_EXPR,
+	  && check_for_casting_away_constness (loc, intype, UNKNOWN_LOCATION,
+					       type, REINTERPRET_CAST_EXPR,
 					       complain))
 	return error_mark_node;
       /* Warn about possible alignment problems.  */
@@ -8616,8 +8616,8 @@ build_reinterpret_cast (location_t loc, tree type, tree expr,
    whether or not the conversion succeeded.  */
 
 static tree
-build_const_cast_1 (location_t type_loc, location_t loc, tree dst_type, tree expr,
-		    tsubst_flags_t complain, bool *valid_p)
+build_const_cast_1 (location_t type_loc, location_t loc, tree dst_type,
+		    tree expr, tsubst_flags_t complain, bool *valid_p)
 {
   tree src_type;
   tree reference_type;
@@ -8753,8 +8753,8 @@ build_const_cast_1 (location_t type_loc, location_t loc, tree dst_type, tree exp
       else if (valid_p
 	       && !at_least_as_qualified_p (TREE_TYPE (dst_type),
 					    TREE_TYPE (src_type)))
-	check_for_casting_away_constness (loc, src_type, UNKNOWN_LOCATION, dst_type,
-					  CAST_EXPR, complain);
+	check_for_casting_away_constness (loc, src_type, UNKNOWN_LOCATION,
+					  dst_type, CAST_EXPR, complain);
     }
 
   if (complain & tf_error)
@@ -8785,7 +8785,8 @@ build_const_cast (location_t loc, tree type, tree expr,
       return r;
     }
 
-  r = build_const_cast_1 (UNKNOWN_LOCATION, loc, type, expr, complain, /*valid_p=*/NULL);
+  r = build_const_cast_1 (UNKNOWN_LOCATION, loc, type, expr, complain,
+			  /*valid_p=*/NULL);
   if (r != error_mark_node)
     {
       maybe_warn_about_useless_cast (loc, type, expr, complain);
@@ -8800,7 +8801,8 @@ build_const_cast (location_t loc, tree type, tree expr,
 tree
 build_c_cast (location_t loc, tree type, tree expr)
 {
-  return cp_build_c_cast (UNKNOWN_LOCATION, loc, type, expr, tf_warning_or_error);
+  return cp_build_c_cast (UNKNOWN_LOCATION, loc, type, expr,
+			  tf_warning_or_error);
 }
 
 /* Like the "build_c_cast" used for c-common, but using cp_expr to
@@ -8810,7 +8812,8 @@ build_c_cast (location_t loc, tree type, tree expr)
 cp_expr
 build_c_cast (location_t loc, tree type, cp_expr expr)
 {
-  cp_expr result = cp_build_c_cast (UNKNOWN_LOCATION, loc, type, expr, tf_warning_or_error);
+  cp_expr result = cp_build_c_cast (UNKNOWN_LOCATION, loc, type, expr,
+				    tf_warning_or_error);
   result.set_location (loc);
   return result;
 }
@@ -8922,7 +8925,7 @@ cp_build_c_cast (location_t type_loc, location_t loc, tree type, tree expr,
 	}
       warning_at (&rich_loc, OPT_Wfunctional_cast_, "functional cast "
 		  "from type %qT to type %qT interpreted as "
-		  "%<static_cast%>", TREE_TYPE(expr), type);
+		  "%<static_cast%>", TREE_TYPE (expr), type);
     }
 
   /* Or a reinterpret_cast.  */
@@ -8971,7 +8974,8 @@ cp_build_c_cast (location_t type_loc, location_t loc, tree type, tree expr,
 	 to succeed.  */
       if (!same_type_p (non_reference (type), non_reference (result_type)))
 	{
-	  result = build_const_cast_1 (type_loc, loc, type, result, false, &valid_p);
+	  result = build_const_cast_1 (type_loc, loc, type, result, false,
+				       &valid_p);
 	  gcc_assert (valid_p);
 	}
       return result;
@@ -9866,7 +9870,8 @@ convert_for_assignment (tree type, tree rhs,
 	{
 	  warning_sentinel w (warn_useless_cast);
 	  warning_sentinel w2 (warn_ignored_qualifiers);
-	  rhs = cp_build_c_cast (UNKNOWN_LOCATION, rhs_loc, type, elt, complain);
+	  rhs = cp_build_c_cast (UNKNOWN_LOCATION, rhs_loc, type, elt,
+				 complain);
 	}
       else
 	rhs = error_mark_node;

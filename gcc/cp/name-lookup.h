@@ -101,7 +101,8 @@ struct GTY(()) binding_slot {
   void or_lazy (unsigned snum)
   {
     gcc_checking_assert (is_lazy ());
-    u.binding = reinterpret_cast<tree> (reinterpret_cast<uintptr_t> (u.binding) | (snum << 1));
+    u.binding = reinterpret_cast<tree> (reinterpret_cast<uintptr_t> (u.binding)
+					| (snum << 1));
   }
   unsigned get_lazy () const
   {
