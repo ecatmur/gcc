@@ -246,7 +246,7 @@ private CT Dsymbol_canThrow(Dsymbol s, FuncDeclaration func, bool mustNotThrow)
         if (vd.storage_class & STC.manifest)
         {
         }
-        else if (vd.isStatic() || vd.storage_class & (STC.extern_ | STC.tls | STC.gshared))
+        else if (vd.isStatic() || vd.storage_class & (STC.extern_ | STC.gshared))
         {
         }
         else
@@ -270,18 +270,7 @@ private CT Dsymbol_canThrow(Dsymbol s, FuncDeclaration func, bool mustNotThrow)
     }
     else if (auto td = s.isTupleDeclaration())
     {
-        for (size_t i = 0; i < td.objects.dim; i++)
-        {
-            RootObject o = (*td.objects)[i];
-            if (o.dyncast() == DYNCAST.expression)
-            {
-                Expression eo = cast(Expression)o;
-                if (auto se = eo.isDsymbolExp())
-                {
-                    result |= Dsymbol_canThrow(se.s, func, mustNotThrow);
-                }
-            }
-        }
+        td.foreachVar(&symbolDg);
     }
     return result;
 }

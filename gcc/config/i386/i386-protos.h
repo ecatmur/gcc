@@ -53,6 +53,7 @@ extern bool ix86_using_red_zone (void);
 extern rtx ix86_gen_scratch_sse_rtx (machine_mode);
 
 extern unsigned int ix86_regmode_natural_size (machine_mode);
+extern bool ix86_check_builtin_isa_match (unsigned int fcode);
 #ifdef RTX_CODE
 extern int standard_80387_constant_p (rtx);
 extern const char *standard_80387_constant_opcode (rtx);
@@ -121,6 +122,8 @@ extern void ix86_expand_unary_operator (enum rtx_code, machine_mode,
 					rtx[]);
 extern rtx ix86_build_const_vector (machine_mode, bool, rtx);
 extern rtx ix86_build_signbit_mask (machine_mode, bool, bool);
+extern HOST_WIDE_INT ix86_convert_const_vector_to_integer (rtx,
+							   machine_mode);
 extern void ix86_split_convert_uns_si_sse (rtx[]);
 extern void ix86_expand_convert_uns_didf_sse (rtx, rtx);
 extern void ix86_expand_convert_uns_sixf_sse (rtx, rtx);
@@ -405,3 +408,7 @@ extern rtl_opt_pass *make_pass_remove_partial_avx_dependency
   (gcc::context *);
 
 extern bool ix86_has_no_direct_extern_access;
+
+/* In i386-expand.cc.  */
+bool ix86_check_builtin_isa_match (unsigned int, HOST_WIDE_INT*,
+				   HOST_WIDE_INT*);
