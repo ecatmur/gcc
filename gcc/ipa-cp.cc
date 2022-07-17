@@ -1020,7 +1020,7 @@ ipcp_vr_lattice::meet_with_1 (const value_range *other_vr)
 
   value_range save (m_vr);
   m_vr.union_ (*other_vr);
-  return !m_vr.equal_p (save);
+  return m_vr != save;
 }
 
 /* Return true if value range information in the lattice is yet unknown.  */
@@ -6657,14 +6657,14 @@ public:
   {}
 
   /* opt_pass methods: */
-  virtual bool gate (function *)
+  bool gate (function *) final override
     {
       /* FIXME: We should remove the optimize check after we ensure we never run
 	 IPA passes when not optimizing.  */
       return (flag_ipa_cp && optimize) || in_lto_p;
     }
 
-  virtual unsigned int execute (function *) { return ipcp_driver (); }
+  unsigned int execute (function *) final override { return ipcp_driver (); }
 
 }; // class pass_ipa_cp
 
