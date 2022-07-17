@@ -1,3 +1,53 @@
+2022-07-12  Tobias Burnus  <tobias@codesourcery.com>
+
+	* target.c (gomp_target_init): Added tailing '\n' to gomp_debug.
+
+2022-07-12  Thomas Schwinge  <thomas@codesourcery.com>
+
+	PR middle-end/101551
+	* testsuite/libgomp.oacc-c-c++-common/reduction-5.c: XFAIL
+	'offloading_enabled' diagnostics issue.
+
+2022-07-11  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* testsuite/libgomp.oacc-c-c++-common/reduction-5.c: Enhance
+	'_Pragma' diagnostics verification.
+
+2022-07-10  Lewis Hyatt  <lhyatt@gmail.com>
+
+	* testsuite/libgomp.oacc-c-c++-common/reduction-5.c: Adapt for
+	improved warning locations.
+	* testsuite/libgomp.oacc-c-c++-common/vred2d-128.c: Likewise.
+
+2022-07-08  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* testsuite/libgomp.c-c++-common/requires-1.c: Add 'dg-note's.
+	* testsuite/libgomp.c-c++-common/requires-2.c: Likewise.
+	* testsuite/libgomp.c-c++-common/requires-3.c: Likewise.
+	* testsuite/libgomp.c-c++-common/requires-7.c: Likewise.
+	* testsuite/libgomp.fortran/requires-1.f90: Likewise.
+
+2022-07-07  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* target.c (GOMP_offload_register, GOMP_offload_unregister):
+	Denote as legacy entry points.
+	* testsuite/lib/libgomp.exp
+	(check_effective_target_offload_target_any): New proc.
+	* testsuite/libgomp.c-c++-common/requires-1.c: Enable for
+	'offload_target_any'.
+	* testsuite/libgomp.c-c++-common/requires-3.c: Likewise.
+	* testsuite/libgomp.c-c++-common/requires-7.c: Likewise.
+	* testsuite/libgomp.fortran/requires-1.f90: Likewise.
+
+2022-07-07  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* testsuite/libgomp.c-c++-common/requires-4.c: Enhance testing.
+	* testsuite/libgomp.c-c++-common/requires-5.c: Likewise.
+
+2022-07-07  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* testsuite/libgomp.c-c++-common/requires-3.c: Adjust.
+
 2022-07-06  Thomas Schwinge  <thomas@codesourcery.com>
 
 	* target.c (GOMP_offload_register_ver): Clarify 'target_data' ->
