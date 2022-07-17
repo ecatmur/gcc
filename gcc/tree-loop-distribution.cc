@@ -2751,7 +2751,7 @@ version_loop_by_alias_check (vec<struct partition *> *partitions,
       gimple_stmt_iterator cond_gsi = gsi_last_bb (cond_bb);
       gsi_insert_seq_before (&cond_gsi, cond_stmts, GSI_SAME_STMT);
     }
-  update_ssa (TODO_update_ssa);
+  update_ssa (TODO_update_ssa_no_phi);
 }
 
 /* Return true if loop versioning is needed to distrubute PARTITIONS.
@@ -3277,8 +3277,15 @@ find_seed_stmts_for_distribution (class loop *loop, vec<gimple *> *work_list)
 	  work_list->safe_push (stmt);
 	}
     }
+  bool res = work_list->length () > 0;
+  if (res && !can_copy_bbs_p (bbs, loop->num_nodes))
+    {
+      if (dump_file && (dump_flags & TDF_DETAILS))
+	fprintf (dump_file, "cannot copy loop %d.\n", loop->num);
+      res = false;
+    }
   free (bbs);
-  return work_list->length () > 0;
+  return res;
 }
 
 /* A helper function for generate_{rawmemchr,strlen}_builtin functions in order
@@ -3290,6 +3297,8 @@ generate_reduction_builtin_1 (loop_p loop, gimple_seq &seq,
 			      tree reduction_var_old, tree reduction_var_new,
 			      const char *info, machine_mode load_mode)
 {
+  gcc_assert (flag_tree_loop_distribute_patterns);
+
   /* Place new statements before LOOP.  */
   gimple_stmt_iterator gsi = gsi_last_bb (loop_preheader_edge (loop)->src);
   gsi_insert_seq_after (&gsi, seq, GSI_CONTINUE_LINKING);
@@ -3649,6 +3658,7 @@ loop_distribution::transform_reduction_loop (loop_p loop)
   /* Handle strlen like loops.  */
   if (store_dr == NULL
       && integer_zerop (pattern)
+      && INTEGRAL_TYPE_P (TREE_TYPE (reduction_var))
       && TREE_CODE (reduction_iv.base) == INTEGER_CST
       && TREE_CODE (reduction_iv.step) == INTEGER_CST
       && integer_onep (reduction_iv.step))
@@ -3773,7 +3783,8 @@ loop_distribution::execute (function *fun)
       if (niters == NULL_TREE || niters == chrec_dont_know)
 	{
 	  datarefs_vec.create (20);
-	  if (transform_reduction_loop (loop))
+	  if (flag_tree_loop_distribute_patterns
+	      && transform_reduction_loop (loop))
 	    {
 	      changed = true;
 	      loops_to_be_destroyed.safe_push (loop);
@@ -3850,7 +3861,7 @@ loop_distribution::execute (function *fun)
 
       /* Cached scalar evolutions now may refer to wrong or non-existing
 	 loops.  */
-      scev_reset_htab ();
+      scev_reset ();
       mark_virtual_operands_for_renaming (fun);
       rewrite_into_loop_closed_ssa (NULL, TODO_update_ssa);
     }
@@ -3886,13 +3897,13 @@ public:
   {}
 
   /* opt_pass methods: */
-  virtual bool gate (function *)
+  bool gate (function *) final override
     {
       return flag_tree_loop_distribution
 	|| flag_tree_loop_distribute_patterns;
     }
 
-  virtual unsigned int execute (function *);
+  unsigned int execute (function *) final override;
 
 }; // class pass_loop_distribution
 

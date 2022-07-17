@@ -999,7 +999,8 @@ noce_emit_move_insn (rtx x, rtx y)
 		}
 
 	      gcc_assert (start < (MEM_P (op) ? BITS_PER_UNIT : BITS_PER_WORD));
-	      store_bit_field (op, size, start, 0, 0, GET_MODE (x), y, false);
+	      store_bit_field (op, size, start, 0, 0, GET_MODE (x), y, false,
+			       false);
 	      return;
 	    }
 
@@ -1056,7 +1057,7 @@ noce_emit_move_insn (rtx x, rtx y)
   outmode = GET_MODE (outer);
   bitpos = SUBREG_BYTE (outer) * BITS_PER_UNIT;
   store_bit_field (inner, GET_MODE_BITSIZE (outmode), bitpos,
-		   0, 0, outmode, y, false);
+		   0, 0, outmode, y, false, false);
 }
 
 /* Return the CC reg if it is used in COND.  */
@@ -1678,10 +1679,10 @@ noce_try_store_flag_mask (struct noce_if_info *if_info)
   reversep = 0;
 
   if ((if_info->a == const0_rtx
-       && rtx_equal_p (if_info->b, if_info->x))
+       && (REG_P (if_info->b) || rtx_equal_p (if_info->b, if_info->x)))
       || ((reversep = (noce_reversed_cond_code (if_info) != UNKNOWN))
 	  && if_info->b == const0_rtx
-	  && rtx_equal_p (if_info->a, if_info->x)))
+	  && (REG_P (if_info->a) || rtx_equal_p (if_info->a, if_info->x))))
     {
       start_sequence ();
       target = noce_emit_store_flag (if_info,
@@ -1689,7 +1690,7 @@ noce_try_store_flag_mask (struct noce_if_info *if_info)
 				     reversep, -1);
       if (target)
         target = expand_simple_binop (GET_MODE (if_info->x), AND,
-				      if_info->x,
+				      reversep ? if_info->a : if_info->b,
 				      target, if_info->x, 0,
 				      OPTAB_WIDEN);
 
@@ -2833,18 +2834,19 @@ noce_try_sign_mask (struct noce_if_info *if_info)
     return FALSE;
 
   /* This is only profitable if T is unconditionally executed/evaluated in the
-     original insn sequence or T is cheap.  The former happens if B is the
-     non-zero (T) value and if INSN_B was taken from TEST_BB, or there was no
-     INSN_B which can happen for e.g. conditional stores to memory.  For the
-     cost computation use the block TEST_BB where the evaluation will end up
-     after the transformation.  */
+     original insn sequence or T is cheap and can't trap or fault.  The former
+     happens if B is the non-zero (T) value and if INSN_B was taken from
+     TEST_BB, or there was no INSN_B which can happen for e.g. conditional
+     stores to memory.  For the cost computation use the block TEST_BB where
+     the evaluation will end up after the transformation.  */
   t_unconditional
     = (t == if_info->b
        && (if_info->insn_b == NULL_RTX
 	   || BLOCK_FOR_INSN (if_info->insn_b) == if_info->test_bb));
   if (!(t_unconditional
-	|| (set_src_cost (t, mode, if_info->speed_p)
-	    < COSTS_N_INSNS (2))))
+	|| ((set_src_cost (t, mode, if_info->speed_p)
+	     < COSTS_N_INSNS (2))
+	    && !may_trap_or_fault_p (t))))
     return FALSE;
 
   if (!noce_can_force_operand (t))
@@ -3391,7 +3393,11 @@ noce_convert_multiple_sets_1 (struct noce_if_info *if_info,
   rtx cond = noce_get_condition (jump, &cond_earliest, false);
 
   rtx cc_cmp = cond_exec_get_condition (jump);
+  if (cc_cmp)
+    cc_cmp = copy_rtx (cc_cmp);
   rtx rev_cc_cmp = cond_exec_get_condition (jump, /* get_reversed */ true);
+  if (rev_cc_cmp)
+    rev_cc_cmp = copy_rtx (rev_cc_cmp);
 
   rtx_insn *insn;
   int count = 0;
@@ -3515,6 +3521,7 @@ noce_convert_multiple_sets_1 (struct noce_if_info *if_info,
       unsigned cost1 = 0, cost2 = 0;
       rtx_insn *seq, *seq1, *seq2;
       rtx temp_dest = NULL_RTX, temp_dest1 = NULL_RTX, temp_dest2 = NULL_RTX;
+      bool read_comparison = false;
 
       seq1 = try_emit_cmove_seq (if_info, temp, cond,
 				 new_val, old_val, need_cmov,
@@ -3524,9 +3531,40 @@ noce_convert_multiple_sets_1 (struct noce_if_info *if_info,
 	 as well.  This allows the backend to emit a cmov directly without
 	 creating an additional compare for each.  If successful, costing
 	 is easier and this sequence is usually preferred.  */
-      seq2 = try_emit_cmove_seq (if_info, target, cond,
+      seq2 = try_emit_cmove_seq (if_info, temp, cond,
 				 new_val, old_val, need_cmov,
 				 &cost2, &temp_dest2, cc_cmp, rev_cc_cmp);
+
+      /* The backend might have created a sequence that uses the
+	 condition.  Check this.  */
+      rtx_insn *walk = seq2;
+      while (walk)
+	{
+	  rtx set = single_set (walk);
+
+	  if (!set || !SET_SRC (set))
+	    {
+	      walk = NEXT_INSN (walk);
+	      continue;
+	    }
+
+	  rtx src = SET_SRC (set);
+
+	  if (XEXP (set, 1) && GET_CODE (XEXP (set, 1)) == IF_THEN_ELSE)
+	    ; /* We assume that this is the cmove created by the backend that
+		 naturally uses the condition.  Therefore we ignore it.  */
+	  else
+	    {
+	      if (reg_mentioned_p (XEXP (cond, 0), src)
+		  || reg_mentioned_p (XEXP (cond, 1), src))
+		{
+		  read_comparison = true;
+		  break;
+		}
+	    }
+
+	  walk = NEXT_INSN (walk);
+	}
 
       /* Check which version is less expensive.  */
       if (seq1 != NULL_RTX && (cost1 <= cost2 || seq2 == NULL_RTX))
@@ -3540,6 +3578,8 @@ noce_convert_multiple_sets_1 (struct noce_if_info *if_info,
 	{
 	  seq = seq2;
 	  temp_dest = temp_dest2;
+	  if (!second_try && read_comparison)
+	    *last_needs_comparison = count;
 	}
       else
 	{
@@ -3557,6 +3597,12 @@ noce_convert_multiple_sets_1 (struct noce_if_info *if_info,
       temporaries->safe_push (temp_dest);
       unmodified_insns->safe_push (insn);
     }
+
+  /* Even if we did not actually need the comparison, we want to make sure
+     to try a second time in order to get rid of the temporaries.  */
+  if (*last_needs_comparison == -1)
+    *last_needs_comparison = 0;
+
 
   return true;
 }
@@ -5207,12 +5253,15 @@ find_if_case_1 (basic_block test_bb, edge then_edge, edge else_edge)
   if ((BB_END (then_bb)
        && JUMP_P (BB_END (then_bb))
        && CROSSING_JUMP_P (BB_END (then_bb)))
-      || (BB_END (test_bb)
-	  && JUMP_P (BB_END (test_bb))
+      || (JUMP_P (BB_END (test_bb))
 	  && CROSSING_JUMP_P (BB_END (test_bb)))
       || (BB_END (else_bb)
 	  && JUMP_P (BB_END (else_bb))
 	  && CROSSING_JUMP_P (BB_END (else_bb))))
+    return FALSE;
+
+  /* Verify test_bb ends in a conditional jump with no other side-effects.  */
+  if (!onlyjump_p (BB_END (test_bb)))
     return FALSE;
 
   /* THEN has one successor.  */
@@ -5328,12 +5377,15 @@ find_if_case_2 (basic_block test_bb, edge then_edge, edge else_edge)
   if ((BB_END (then_bb)
        && JUMP_P (BB_END (then_bb))
        && CROSSING_JUMP_P (BB_END (then_bb)))
-      || (BB_END (test_bb)
-	  && JUMP_P (BB_END (test_bb))
+      || (JUMP_P (BB_END (test_bb))
 	  && CROSSING_JUMP_P (BB_END (test_bb)))
       || (BB_END (else_bb)
 	  && JUMP_P (BB_END (else_bb))
 	  && CROSSING_JUMP_P (BB_END (else_bb))))
+    return FALSE;
+
+  /* Verify test_bb ends in a conditional jump with no other side-effects.  */
+  if (!onlyjump_p (BB_END (test_bb)))
     return FALSE;
 
   /* ELSE has one successor.  */
@@ -5883,12 +5935,12 @@ public:
   {}
 
   /* opt_pass methods: */
-  virtual bool gate (function *)
+  bool gate (function *) final override
     {
       return (optimize > 0) && dbg_cnt (if_conversion);
     }
 
-  virtual unsigned int execute (function *)
+  unsigned int execute (function *) final override
     {
       return rest_of_handle_if_conversion ();
     }
@@ -5930,13 +5982,13 @@ public:
   {}
 
   /* opt_pass methods: */
-  virtual bool gate (function *)
+  bool gate (function *) final override
     {
       return optimize > 0 && flag_if_conversion
 	&& dbg_cnt (if_after_combine);
     }
 
-  virtual unsigned int execute (function *)
+  unsigned int execute (function *) final override
     {
       if_convert (true);
       return 0;
@@ -5976,13 +6028,13 @@ public:
   {}
 
   /* opt_pass methods: */
-  virtual bool gate (function *)
+  bool gate (function *) final override
     {
       return optimize > 0 && flag_if_conversion2
 	&& dbg_cnt (if_after_reload);
     }
 
-  virtual unsigned int execute (function *)
+  unsigned int execute (function *) final override
     {
       if_convert (true);
       return 0;

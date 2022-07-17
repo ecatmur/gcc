@@ -318,35 +318,42 @@ range::add_bound (bound b, enum bound_kind bound_kind)
       if (m_lower_bound.m_constant)
 	{
 	  m_lower_bound.ensure_closed (BK_LOWER);
-	  if (!tree_int_cst_lt (b.m_constant,
-				m_lower_bound.m_constant))
+	  if (tree_int_cst_le (b.m_constant,
+			       m_lower_bound.m_constant))
 	    return true;
+	}
+      if (m_upper_bound.m_constant)
+	{
+	  m_upper_bound.ensure_closed (BK_UPPER);
+	  /* Reject B <= V <= UPPER when B > UPPER.  */
+	  if (!tree_int_cst_le (b.m_constant,
+				m_upper_bound.m_constant))
+	    return false;
 	}
       m_lower_bound = b;
       break;
+
     case BK_UPPER:
       /* Discard redundant bounds.  */
       if (m_upper_bound.m_constant)
 	{
 	  m_upper_bound.ensure_closed (BK_UPPER);
-	  if (tree_int_cst_le (b.m_constant,
-			       m_upper_bound.m_constant))
+	  if (!tree_int_cst_lt (b.m_constant,
+				m_upper_bound.m_constant))
 	    return true;
+	}
+      if (m_lower_bound.m_constant)
+	{
+	  m_lower_bound.ensure_closed (BK_LOWER);
+	  /* Reject LOWER <= V <= B when LOWER > B.  */
+	  if (!tree_int_cst_le (m_lower_bound.m_constant,
+				b.m_constant))
+	    return false;
 	}
       m_upper_bound = b;
       break;
     }
-  if (m_lower_bound.m_constant
-      && m_upper_bound.m_constant)
-    {
-      m_lower_bound.ensure_closed (BK_LOWER);
-      m_upper_bound.ensure_closed (BK_UPPER);
 
-      /* Reject LOWER <= V <= UPPER when LOWER > UPPER.  */
-      if (!tree_int_cst_le (m_lower_bound.m_constant,
-			    m_upper_bound.m_constant))
-	return false;
-    }
   return true;
 }
 
@@ -1024,7 +1031,7 @@ void
 bounded_ranges_manager::log_stats (logger *logger, bool show_objs) const
 {
   LOG_SCOPE (logger);
-  logger->log ("  # %s: %li", "ranges", m_map.elements ());
+  logger->log ("  # %s: %li", "ranges", (long)m_map.elements ());
   if (!show_objs)
     return;
 
@@ -1811,6 +1818,10 @@ constraint_manager::add_constraint (const svalue *lhs,
 	      = m_mgr->get_or_create_constant_svalue (offset_of_cst);
 	    if (!add_constraint (implied_lhs, implied_op, implied_rhs))
 	      return false;
+	    /* The above add_constraint could lead to EC merger, so we need
+	       to refresh the EC IDs.  */
+	    lhs_ec_id = get_or_add_equiv_class (lhs);
+	    rhs_ec_id = get_or_add_equiv_class (rhs);
 	  }
 
   add_unknown_constraint (lhs_ec_id, op, rhs_ec_id);
@@ -2894,7 +2905,7 @@ public:
   {}
 
   void on_fact (const svalue *lhs, enum tree_code code, const svalue *rhs)
-    FINAL OVERRIDE
+    final override
   {
     /* Special-case for widening.  */
     if (lhs->get_kind () == SK_WIDENING)
@@ -2922,7 +2933,7 @@ public:
   }
 
   void on_ranges (const svalue *lhs_sval,
-		  const bounded_ranges *ranges) FINAL OVERRIDE
+		  const bounded_ranges *ranges) final override
   {
     for (const auto &iter : m_cm_b->m_bounded_ranges_constraints)
       {
@@ -3092,6 +3103,49 @@ namespace selftest {
 /* Various constraint_manager selftests.
    These have to be written in terms of a region_model, since
    the latter is responsible for managing svalue instances.  */
+
+/* Verify that range::add_bound works as expected.  */
+
+static void
+test_range ()
+{
+  tree int_0 = build_int_cst (integer_type_node, 0);
+  tree int_1 = build_int_cst (integer_type_node, 1);
+  tree int_2 = build_int_cst (integer_type_node, 2);
+  tree int_5 = build_int_cst (integer_type_node, 5);
+
+  {
+    range r;
+    ASSERT_FALSE (r.constrained_to_single_element ());
+
+    /* (r >= 1).  */
+    ASSERT_TRUE (r.add_bound (GE_EXPR, int_1));
+
+    /* Redundant.  */
+    ASSERT_TRUE (r.add_bound (GE_EXPR, int_0));
+    ASSERT_TRUE (r.add_bound (GT_EXPR, int_0));
+
+    ASSERT_FALSE (r.constrained_to_single_element ());
+
+    /* Contradiction.  */
+    ASSERT_FALSE (r.add_bound (LT_EXPR, int_1));
+
+    /* (r < 5).  */
+    ASSERT_TRUE (r.add_bound (LT_EXPR, int_5));
+    ASSERT_FALSE (r.constrained_to_single_element ());
+
+    /* Contradiction.  */
+    ASSERT_FALSE (r.add_bound (GE_EXPR, int_5));
+
+    /* (r < 2).  */
+    ASSERT_TRUE (r.add_bound (LT_EXPR, int_2));
+    ASSERT_TRUE (r.constrained_to_single_element ());
+
+    /* Redundant.  */
+    ASSERT_TRUE (r.add_bound (LE_EXPR, int_1));
+    ASSERT_TRUE (r.constrained_to_single_element ());
+  }
+}
 
 /* Verify that setting and getting simple conditions within a region_model
    work (thus exercising the underlying constraint_manager).  */
@@ -3702,6 +3756,20 @@ test_constant_comparisons ()
     }
     {
       region_model model (&mgr);
+      ADD_SAT_CONSTRAINT (model, int_1, LT_EXPR, a);
+      ADD_SAT_CONSTRAINT (model, int_3, LT_EXPR, a);
+      ADD_SAT_CONSTRAINT (model, a, LT_EXPR, int_5);
+      ADD_UNSAT_CONSTRAINT (model, a, LT_EXPR, int_4);
+    }
+    {
+      region_model model (&mgr);
+      ADD_SAT_CONSTRAINT (model, int_1, LT_EXPR, a);
+      ADD_SAT_CONSTRAINT (model, a, LT_EXPR, int_5);
+      ADD_SAT_CONSTRAINT (model, int_3, LT_EXPR, a);
+      ADD_UNSAT_CONSTRAINT (model, a, LT_EXPR, int_4);
+    }
+    {
+      region_model model (&mgr);
       ADD_SAT_CONSTRAINT (model, a, LT_EXPR, int_4);
       ADD_UNSAT_CONSTRAINT (model, int_3, LT_EXPR, a);
     }
@@ -3855,10 +3923,10 @@ test_equality ()
 static void
 test_many_constants ()
 {
-  program_point point (program_point::origin ());
+  region_model_manager mgr;
+  program_point point (program_point::origin (mgr));
   tree a = build_global_decl ("a", integer_type_node);
 
-  region_model_manager mgr;
   region_model model (&mgr);
   auto_vec<tree> constants;
   for (int i = 0; i < 20; i++)
@@ -4323,6 +4391,7 @@ run_constraint_manager_tests (bool transitivity)
   int saved_flag_analyzer_transitivity = flag_analyzer_transitivity;
   flag_analyzer_transitivity = transitivity;
 
+  test_range ();
   test_constraint_conditions ();
   if (flag_analyzer_transitivity)
     {

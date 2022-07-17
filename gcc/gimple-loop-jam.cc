@@ -198,7 +198,8 @@ unroll_jam_possible_p (class loop *outer, class loop *loop)
   if (!empty_block_p (loop->latch))
     return false;
 
-  if (!single_exit (loop))
+  edge exit;
+  if (!(exit = single_exit (loop)))
     return false;
 
   /* We need a perfect nest.  Quick check for adjacent inner loops.  */
@@ -259,7 +260,12 @@ unroll_jam_possible_p (class loop *outer, class loop *loop)
   n = get_loop_body_with_size (outer, bbs, n_basic_blocks_for_fn (cfun));
 
   for (i = 0; i < n; i++)
-    if (bbs[i]->loop_father == outer && bb_prevents_fusion_p (bbs[i]))
+    if (bbs[i]->loop_father == outer
+	&& (bb_prevents_fusion_p (bbs[i])
+	    /* Outer loop exits must come after the inner loop, otherwise
+	       we'll put the outer loop exit into the fused inner loop.  */
+	    || (loop_exits_from_bb_p (outer, bbs[i])
+		&& !dominated_by_p (CDI_DOMINATORS, bbs[i], exit->src))))
       break;
   free (bbs);
   if (i != n)
@@ -357,7 +363,6 @@ fuse_loops (class loop *loop)
       delete_loop (next);
       next = ln;
     }
-  rewrite_into_loop_closed_ssa_1 (NULL, 0, SSA_OP_USE, loop);
 }
 
 /* Return true if any of the access functions for dataref A
@@ -604,6 +609,7 @@ tree_loop_unroll_and_jam (void)
 
   if (todo)
     {
+      rewrite_into_loop_closed_ssa (NULL, 0);
       scev_reset ();
       free_dominance_info (CDI_DOMINATORS);
     }
@@ -635,8 +641,8 @@ public:
   {}
 
   /* opt_pass methods: */
-  virtual bool gate (function *) { return flag_unroll_jam != 0; }
-  virtual unsigned int execute (function *);
+  bool gate (function *) final override { return flag_unroll_jam != 0; }
+  unsigned int execute (function *) final override;
 
 };
 
