@@ -638,27 +638,44 @@ ubsan_create_data (const char *name, int loccnt, const location_t *ploc, ...)
   return var;
 }
 
-/* Instrument the __builtin_unreachable call.  We just call the libubsan
-   routine instead.  */
+/* Shared between *build_builtin_unreachable.  */
+
+tree
+sanitize_unreachable_fn (tree *data, location_t loc)
+{
+  tree fn = NULL_TREE;
+  bool san = sanitize_flags_p (SANITIZE_UNREACHABLE);
+  if (san
+      ? (flag_sanitize_trap & SANITIZE_UNREACHABLE)
+      : flag_unreachable_traps)
+    {
+      fn = builtin_decl_explicit (BUILT_IN_TRAP);
+      *data = NULL_TREE;
+    }
+  else if (san)
+    {
+      /* Call ubsan_create_data first as it initializes SANITIZER built-ins.  */
+      *data = ubsan_create_data ("__ubsan_unreachable_data", 1, &loc,
+				 NULL_TREE, NULL_TREE);
+      fn = builtin_decl_explicit (BUILT_IN_UBSAN_HANDLE_BUILTIN_UNREACHABLE);
+      *data = build_fold_addr_expr_loc (loc, *data);
+    }
+  else
+    {
+      fn = builtin_decl_explicit (BUILT_IN_UNREACHABLE);
+      *data = NULL_TREE;
+    }
+  return fn;
+}
+
+/* Rewrite a gcall to __builtin_unreachable for -fsanitize=unreachable.  Called
+   by the sanopt pass.  */
 
 bool
 ubsan_instrument_unreachable (gimple_stmt_iterator *gsi)
 {
-  gimple *g;
   location_t loc = gimple_location (gsi_stmt (*gsi));
-
-  if (flag_sanitize_trap & SANITIZE_UNREACHABLE)
-    g = gimple_build_call (builtin_decl_explicit (BUILT_IN_TRAP), 0);
-  else
-    {
-      tree data = ubsan_create_data ("__ubsan_unreachable_data", 1, &loc,
-				     NULL_TREE, NULL_TREE);
-      data = build_fold_addr_expr_loc (loc, data);
-      tree fn
-	= builtin_decl_explicit (BUILT_IN_UBSAN_HANDLE_BUILTIN_UNREACHABLE);
-      g = gimple_build_call (fn, 1, data);
-    }
-  gimple_set_location (g, loc);
+  gimple *g = gimple_build_builtin_unreachable (loc);
   gsi_replace (gsi, g, false);
   return false;
 }
@@ -2331,7 +2348,7 @@ public:
   {}
 
   /* opt_pass methods: */
-  virtual bool gate (function *)
+  bool gate (function *) final override
     {
       return sanitize_flags_p ((SANITIZE_NULL | SANITIZE_SI_OVERFLOW
 				| SANITIZE_BOOL | SANITIZE_ENUM
@@ -2343,7 +2360,7 @@ public:
 				| SANITIZE_BUILTIN));
     }
 
-  virtual unsigned int execute (function *);
+  unsigned int execute (function *) final override;
 
 }; // class pass_ubsan
 

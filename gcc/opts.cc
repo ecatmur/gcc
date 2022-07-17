@@ -1122,6 +1122,10 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
       opts->x_flag_no_inline = 1;
     }
 
+  /* At -O0 or -Og, turn __builtin_unreachable into a trap.  */
+  if (!opts->x_optimize || opts->x_optimize_debug)
+    SET_OPTION_IF_UNSET (opts, opts_set, flag_unreachable_traps, true);
+
   /* Pipelining of outer loops is only possible when general pipelining
      capabilities are requested.  */
   if (!opts->x_flag_sel_sched_pipelining)
@@ -1210,7 +1214,9 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 
   /* Address sanitizers conflict with the thread sanitizer.  */
   report_conflicting_sanitizer_options (opts, loc, SANITIZE_THREAD,
-					SANITIZE_ADDRESS | SANITIZE_HWADDRESS);
+					SANITIZE_ADDRESS);
+  report_conflicting_sanitizer_options (opts, loc, SANITIZE_THREAD,
+					SANITIZE_HWADDRESS);
   /* The leak sanitizer conflicts with the thread sanitizer.  */
   report_conflicting_sanitizer_options (opts, loc, SANITIZE_LEAK,
 					SANITIZE_THREAD);
@@ -2870,6 +2876,10 @@ common_handle_option (struct gcc_options *opts,
 
     case OPT_fdiagnostics_show_cwe:
       dc->show_cwe = value;
+      break;
+
+    case OPT_fdiagnostics_show_rules:
+      dc->show_rules = value;
       break;
 
     case OPT_fdiagnostics_path_format_:

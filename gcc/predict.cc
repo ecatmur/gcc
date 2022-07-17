@@ -362,6 +362,17 @@ optimize_insn_for_speed_p (void)
   return !optimize_insn_for_size_p ();
 }
 
+/* Return the optimization type that should be used for the current
+   instruction.  */
+
+optimization_type
+insn_optimization_type ()
+{
+  return (optimize_insn_for_speed_p ()
+	  ? OPTIMIZE_FOR_SPEED
+	  : OPTIMIZE_FOR_SIZE);
+}
+
 /* Return TRUE if LOOP should be optimized for size.  */
 
 optimize_size_level
@@ -4078,8 +4089,8 @@ public:
   {}
 
   /* opt_pass methods: */
-  virtual bool gate (function *) { return flag_guess_branch_prob; }
-  virtual unsigned int execute (function *);
+  bool gate (function *) final override { return flag_guess_branch_prob; }
+  unsigned int execute (function *) final override;
 
 }; // class pass_profile
 
@@ -4232,14 +4243,17 @@ public:
   {}
 
   /* opt_pass methods: */
-  opt_pass * clone () { return new pass_strip_predict_hints (m_ctxt); }
-  void set_pass_param (unsigned int n, bool param)
+  opt_pass * clone () final override
+  {
+    return new pass_strip_predict_hints (m_ctxt);
+  }
+  void set_pass_param (unsigned int n, bool param) final override
     {
       gcc_assert (n == 0);
       early_p = param;
     }
 
-  virtual unsigned int execute (function *);
+  unsigned int execute (function *) final override;
 
 private:
   bool early_p;
