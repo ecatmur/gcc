@@ -59,7 +59,13 @@ enum conversion_kind {
   ck_ambig,
   ck_list,
   ck_aggr,
-  ck_rvalue
+  ck_rvalue,
+  /* When LOOKUP_SHORTCUT_BAD_CONVS is set, we may return a conversion of
+     this kind whenever we know the true conversion is either bad or outright
+     invalid, but we don't want to attempt to compute the bad conversion (for
+     sake of avoiding unnecessary instantiation).  bad_p should always be set
+     for these.  */
+  ck_deferred_bad,
 };
 
 /* The rank of the conversion.  Order of the enumerals matters; better
@@ -776,7 +782,8 @@ has_next (conversion_kind code)
   return !(code == ck_identity
 	   || code == ck_ambig
 	   || code == ck_list
-	   || code == ck_aggr);
+	   || code == ck_aggr
+	   || code == ck_deferred_bad);
 }
 
 static conversion *
@@ -1913,18 +1920,48 @@ reference_binding (tree rto, tree rfrom, tree expr, bool c_cast_p, int flags,
      difference in top-level cv-qualification is subsumed by the
      initialization itself and does not constitute a conversion.  */
 
+  bool maybe_valid_p = true;
+
   /* [dcl.init.ref]
 
      Otherwise, the reference shall be an lvalue reference to a
      non-volatile const type, or the reference shall be an rvalue
-     reference.
+     reference.  */
+  if (!CP_TYPE_CONST_NON_VOLATILE_P (to) && !TYPE_REF_IS_RVALUE (rto))
+    {
+      /* If this is a C-style cast, we can cast away const later.  */
+      if (c_cast_p)
+	{
+	  int cflags = (cp_type_quals (to)|TYPE_QUAL_CONST)&~TYPE_QUAL_VOLATILE;
+	  to = cp_build_qualified_type (to, cflags);
+	  rto = cp_build_reference_type (to, false);
+	}
+      else
+	maybe_valid_p = false;
+    }
 
-     We try below to treat this as a bad conversion to improve diagnostics,
-     but if TO is an incomplete class, we need to reject this conversion
-     now to avoid unnecessary instantiation.  */
-  if (!CP_TYPE_CONST_NON_VOLATILE_P (to) && !TYPE_REF_IS_RVALUE (rto)
-      && !COMPLETE_TYPE_P (to))
-    return NULL;
+  /* [dcl.init.ref]
+
+     Otherwise, a temporary of type "cv1 T1" is created and
+     initialized from the initializer expression using the rules for a
+     non-reference copy initialization.  If T1 is reference-related to
+     T2, cv1 must be the same cv-qualification as, or greater
+     cv-qualification than, cv2; otherwise, the program is ill-formed.  */
+  if (related_p && !at_least_as_qualified_p (to, from))
+    maybe_valid_p = false;
+
+  /* We try below to treat an invalid reference binding as a bad conversion
+     to improve diagnostics, but doing so may cause otherwise unnecessary
+     instantiations that can lead to a hard error.  So during the first pass
+     of overload resolution wherein we shortcut bad conversions, instead just
+     produce a special conversion indicating a second pass is necessary if
+     there's no strictly viable candidate.  */
+  if (!maybe_valid_p && (flags & LOOKUP_SHORTCUT_BAD_CONVS))
+    {
+      conv = alloc_conversion (ck_deferred_bad);
+      conv->bad_p = true;
+      return conv;
+    }
 
   /* We're generating a temporary now, but don't bind any more in the
      conversion (specifically, don't slice the temporary returned by a
@@ -1968,7 +2005,9 @@ reference_binding (tree rto, tree rfrom, tree expr, bool c_cast_p, int flags,
 				   sflags, complain);
 	    if (!new_second)
 	      return NULL;
-	    return merge_conversion_sequences (t, new_second);
+	    conv = merge_conversion_sequences (t, new_second);
+	    gcc_assert (maybe_valid_p || conv->bad_p);
+	    return conv;
 	  }
     }
 
@@ -1977,39 +2016,12 @@ reference_binding (tree rto, tree rfrom, tree expr, bool c_cast_p, int flags,
      creation of a temporary.  */
   conv->need_temporary_p = true;
   conv->rvaluedness_matches_p = TYPE_REF_IS_RVALUE (rto);
+  conv->bad_p |= !maybe_valid_p;
 
   if (c_cast_p && (complain & tf_warning)
     && warning (OPT_Wconversion, "reference binding temporary for C-style "
 		"cast"))
       inform (input_location, " use %<reinterpret_cast%> for type-punning");
-
-  /* [dcl.init.ref]
-
-     Otherwise, the reference shall be an lvalue reference to a
-     non-volatile const type, or the reference shall be an rvalue
-     reference.  */
-  if (!CP_TYPE_CONST_NON_VOLATILE_P (to) && !TYPE_REF_IS_RVALUE (rto))
-    {
-      /* If this is a C-style cast, we can cast away const later.  */
-      if (c_cast_p)
-	{
-	  int cflags = (cp_type_quals (to)|TYPE_QUAL_CONST)&~TYPE_QUAL_VOLATILE;
-	  to = cp_build_qualified_type (to, cflags);
-	  conv->type = cp_build_reference_type (to, false);
-	}
-      else
-	conv->bad_p = true;
-    }
-
-  /* [dcl.init.ref]
-
-     Otherwise, a temporary of type "cv1 T1" is created and
-     initialized from the initializer expression using the rules for a
-     non-reference copy initialization.  If T1 is reference-related to
-     T2, cv1 must be the same cv-qualification as, or greater
-     cv-qualification than, cv2; otherwise, the program is ill-formed.  */
-  if (related_p && !at_least_as_qualified_p (to, from))
-    conv->bad_p = true;
 
   return conv;
 }
@@ -2031,7 +2043,8 @@ implicit_conversion_1 (tree to, tree from, tree expr, bool c_cast_p,
      resolution, or after we've chosen one.  */
   flags &= (LOOKUP_ONLYCONVERTING|LOOKUP_NO_CONVERSION|LOOKUP_COPY_PARM
 	    |LOOKUP_NO_TEMP_BIND|LOOKUP_NO_RVAL_BIND|LOOKUP_PREFER_RVALUE
-	    |LOOKUP_NO_NARROWING|LOOKUP_PROTECT|LOOKUP_NO_NON_INTEGRAL);
+	    |LOOKUP_NO_NARROWING|LOOKUP_PROTECT|LOOKUP_NO_NON_INTEGRAL
+	    |LOOKUP_SHORTCUT_BAD_CONVS);
 
   /* FIXME: actually we don't want warnings either, but we can't just
      have 'complain &= ~(tf_warning|tf_error)' because it would cause
@@ -2448,6 +2461,11 @@ add_function_candidate (struct z_candidate **candidates,
 
   if (! viable)
     goto out;
+
+  if (shortcut_bad_convs)
+    flags |= LOOKUP_SHORTCUT_BAD_CONVS;
+  else
+    flags &= ~LOOKUP_SHORTCUT_BAD_CONVS;
 
   /* Third, for F to be a viable function, there shall exist for each
      argument an implicit conversion sequence that converts that argument
@@ -6055,14 +6073,24 @@ perfect_candidate_p (z_candidate *cand)
   return true;
 }
 
-/* True iff one of CAND's argument conversions is NULL.  */
+/* True iff one of CAND's argument conversions is missing.  */
 
 static bool
 missing_conversion_p (const z_candidate *cand)
 {
   for (unsigned i = 0; i < cand->num_convs; ++i)
-    if (!cand->convs[i])
-      return true;
+    {
+      conversion *conv = cand->convs[i];
+      if (!conv)
+	return true;
+      if (conv->kind == ck_deferred_bad)
+	{
+	  /* We don't know whether this conversion is outright invalid or
+	     just bad, so conservatively assume it's missing.  */
+	  gcc_checking_assert (conv->bad_p);
+	  return true;
+	}
+    }
   return false;
 }
 
