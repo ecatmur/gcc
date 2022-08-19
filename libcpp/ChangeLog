@@ -1,3 +1,27 @@
+2022-08-18  Joseph Myers  <joseph@codesourcery.com>
+
+	* include/cpplib.h (struct cpp_options): Add warning_directive.
+	* init.cc (struct lang_flags, lang_defaults): Add
+	warning_directive.
+	* directives.cc (DIRECTIVE_TABLE): Mark #warning as STDC2X not
+	EXTENSION.
+	(directive_diagnostics): Diagnose #warning with -Wc11-c2x-compat,
+	or with -pedantic for a standard not supporting #warning.
+
+2022-08-16  Tom Honermann  <tom@honermann.net>
+
+	PR c++/106423
+	* include/cpplib.h (cpp_warning_reason): Add CPP_W_CXX20_COMPAT.
+	* init.cc (cpp_create_reader): Add cpp_warn_cxx20_compat.
+
+2022-08-08  Tom Honermann  <tom@honermann.net>
+
+	PR preprocessor/106426
+	* charset.cc (narrow_str_to_charconst): Set signedness of CPP_UTF8CHAR
+	literals based on unsigned_utf8char.
+	* include/cpplib.h (cpp_options): Add unsigned_utf8char.
+	* init.cc (cpp_create_reader): Initialize unsigned_utf8char.
+
 2022-07-15  Jonathan Wakely  <jwakely@redhat.com>
 
 	* include/line-map.h (label_text::take_or_copy): Remove.

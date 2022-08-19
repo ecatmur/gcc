@@ -1,3 +1,39 @@
+2022-08-16  Tom Honermann  <tom@honermann.net>
+
+	PR c++/106423
+	* c-opts.cc (c_common_post_options): Disable -Wc++20-compat
+	diagnostics in C++20 and later.
+	* c.opt (Wc++20-compat): Enable hooks for the preprocessor.
+
+2022-08-11  Marek Polacek  <polacek@redhat.com>
+
+	PR middle-end/102633
+	* c-gimplify.cc (c_gimplify_expr) <case DECL_EXPR>: Don't call
+	suppress_warning here.
+
+2022-08-08  Tom Honermann  <tom@honermann.net>
+
+	PR preprocessor/106426
+	* c-opts.cc (c_common_post_options): Assign cpp_opts->unsigned_utf8char
+	subject to -fchar8_t, -fsigned-char, and/or -funsigned-char.
+
+2022-08-08  Tom Honermann  <tom@honermann.net>
+
+	* c-lex.cc (lex_string, lex_charconst): Use char8_t as the type
+	of CPP_UTF8CHAR and CPP_UTF8STRING when char8_t support is
+	enabled.
+	* c-opts.cc (c_common_post_options): Set flag_char8_t if
+	targeting C2x.
+
+2022-07-31  Lewis Hyatt  <lhyatt@gmail.com>
+
+	PR c++/66290
+	* c-common.h: Rename global done_lexing to
+	override_libcpp_locations.
+	* c-common.cc (c_cpp_diagnostic): Likewise.
+	* c-opts.cc (c_common_finish): Set override_libcpp_locations
+	(formerly done_lexing) immediately prior to calling cpp_finish ().
+
 2022-07-27  Lewis Hyatt  <lhyatt@gmail.com>
 
 	* c-ppoutput.cc (token_streamer::stream): Update input_location
