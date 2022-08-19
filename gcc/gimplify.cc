@@ -5488,8 +5488,11 @@ gimplify_init_constructor (tree *expr_p, gimple_seq *pre_p, gimple_seq *post_p,
   if (ret == GS_ERROR)
     return GS_ERROR;
   /* If we have gimplified both sides of the initializer but have
-     not emitted an assignment, do so now.  */
-  if (*expr_p)
+     not emitted an assignment, do so now.   */
+  if (*expr_p
+      /* If the type is an empty type, we don't need to emit the
+	 assignment. */
+      && !is_empty_type (TREE_TYPE (TREE_OPERAND (*expr_p, 0))))
     {
       tree lhs = TREE_OPERAND (*expr_p, 0);
       tree rhs = TREE_OPERAND (*expr_p, 1);
@@ -7882,7 +7885,7 @@ omp_notice_variable (struct gimplify_omp_ctx *ctx, tree decl, bool in_code)
 	      if (gimplify_omp_ctxp->target_firstprivatize_array_bases
 		  && omp_privatize_by_reference (decl))
 		type = TREE_TYPE (type);
-	      if (!lang_hooks.types.omp_mappable_type (type))
+	      if (!omp_mappable_type (type))
 		{
 		  error ("%qD referenced in target region does not have "
 			 "a mappable type", decl);

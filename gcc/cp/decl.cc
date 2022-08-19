@@ -7220,9 +7220,10 @@ check_array_initializer (tree decl, tree type, tree init)
 
 static tree
 build_aggr_init_full_exprs (tree decl, tree init, int flags)
-     
 {
   gcc_assert (stmts_are_full_exprs_p ());
+  if (init)
+    maybe_warn_pessimizing_move (init, TREE_TYPE (decl), /*return_p*/false);
   return build_aggr_init (decl, init, flags, tf_warning_or_error);
 }
 
@@ -8253,6 +8254,14 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
 	      && !TYPE_REF_P (type))
 	    TREE_CONSTANT (decl) = 1;
 	}
+      /* This is handled mostly by gimplify.cc, but we have to deal with
+	 not warning about int x = x; as it is a GCC extension to turn off
+	 this warning but only if warn_init_self is zero.  */
+      if (!DECL_EXTERNAL (decl)
+	  && !TREE_STATIC (decl)
+	  && decl == tree_strip_any_location_wrapper (init)
+	  && !warn_init_self)
+	suppress_warning (decl, OPT_Winit_self);
     }
 
   if (flag_openmp
@@ -8625,11 +8634,13 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
 	= remove_attribute ("omp declare target implicit",
 			    DECL_ATTRIBUTES (decl));
       complete_type (TREE_TYPE (decl));
-      if (!cp_omp_mappable_type (TREE_TYPE (decl)))
+      if (!omp_mappable_type (TREE_TYPE (decl)))
 	{
 	  error ("%q+D in declare target directive does not have mappable"
 		 " type", decl);
-	  cp_omp_emit_unmappable_type_notes (TREE_TYPE (decl));
+	  if (TREE_TYPE (decl) != error_mark_node
+	      && !COMPLETE_TYPE_P (TREE_TYPE (decl)))
+	    cxx_incomplete_type_inform (TREE_TYPE (decl));
 	}
       else if (!lookup_attribute ("omp declare target",
 				  DECL_ATTRIBUTES (decl))
