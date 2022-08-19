@@ -873,6 +873,17 @@ public:
 	gcc_unreachable ();
       }
 
+    /* Look for exp = noreturn;  */
+    if (e->e2->type->isTypeNoreturn ())
+      {
+	/* If the RHS is a `noreturn' expression, there is no point generating
+	   any code for the assignment, just evaluate side effects.  */
+	tree t1 = build_expr (e->e1);
+	tree t2 = build_expr (e->e2);
+	this->result_ = compound_expr (t1, t2);
+	return;
+      }
+
     /* Look for array[] = n;  */
     if (e->e1->op == EXP::slice)
       {
@@ -1881,7 +1892,7 @@ public:
 	       underlying is really a complex type.  */
 	    if (e->e1->type->ty == TY::Tenum
 		&& e->e1->type->isTypeEnum ()->sym->isSpecial ())
-	      object = build_vconvert (build_ctype (tb), object);
+	      object = underlying_complex_expr (build_ctype (tb), object);
 
 	    this->result_ = component_ref (object, get_symbol_decl (vd));
 	  }
