@@ -49,6 +49,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "c-family/c-ada-spec.h"
 #include "asan.h"
 #include "optabs-query.h"
+#include "omp-general.h"
 
 /* Id for dumping the raw trees.  */
 int raw_dump_id;
@@ -1578,62 +1579,6 @@ cp_check_const_attributes (tree attributes)
     }
 }
 
-/* Return true if TYPE is an OpenMP mappable type.
-   If NOTES is non-zero, emit a note message for each problem.  */
-static bool
-cp_omp_mappable_type_1 (tree type, bool notes)
-{
-  bool result = true;
-
-  /* Mappable type has to be complete.  */
-  if (type == error_mark_node || !COMPLETE_TYPE_P (type))
-    {
-      if (notes && type != error_mark_node)
-	{
-	  tree decl = TYPE_MAIN_DECL (type);
-	  inform ((decl ? DECL_SOURCE_LOCATION (decl) : input_location),
-		  "incomplete type %qT is not mappable", type);
-	}
-      result = false;
-    }
-  /* Arrays have mappable type if the elements have mappable type.  */
-  while (TREE_CODE (type) == ARRAY_TYPE)
-    type = TREE_TYPE (type);
-  /* All data members must be non-static.  */
-  if (CLASS_TYPE_P (type))
-    {
-      tree field;
-      for (field = TYPE_FIELDS (type); field; field = DECL_CHAIN (field))
-	if (VAR_P (field))
-	  {
-	    if (notes)
-	      inform (DECL_SOURCE_LOCATION (field),
-		      "static field %qD is not mappable", field);
-	    result = false;
-	  }
-	/* All fields must have mappable types.  */
-	else if (TREE_CODE (field) == FIELD_DECL
-		 && !cp_omp_mappable_type_1 (TREE_TYPE (field), notes))
-	  result = false;
-    }
-  return result;
-}
-
-/* Return true if TYPE is an OpenMP mappable type.  */
-bool
-cp_omp_mappable_type (tree type)
-{
-  return cp_omp_mappable_type_1 (type, false);
-}
-
-/* Return true if TYPE is an OpenMP mappable type.
-   Emit an error messages if not.  */
-bool
-cp_omp_emit_unmappable_type_notes (tree type)
-{
-  return cp_omp_mappable_type_1 (type, true);
-}
-
 /* Return the last pushed declaration for the symbol DECL or NULL
    when no such declaration exists.  */
 
@@ -1709,7 +1654,7 @@ cplus_decl_attributes (tree *decl, tree attributes, int flags)
 	       *decl);
       else if (VAR_P (*decl)
 	       && (processing_template_decl
-		   || !cp_omp_mappable_type (TREE_TYPE (*decl))))
+		   || !omp_mappable_type (TREE_TYPE (*decl))))
 	attributes = tree_cons (get_identifier ("omp declare target implicit"),
 				NULL_TREE, attributes);
       else
@@ -5436,24 +5381,15 @@ possibly_inlined_p (tree decl)
   return true;
 }
 
-/* Normally, we can wait until instantiation-time to synthesize DECL.
-   However, if DECL is a static data member initialized with a constant
-   or a constexpr function, we need it right now because a reference to
-   such a data member or a call to such function is not value-dependent.
-   For a function that uses auto in the return type, we need to instantiate
-   it to find out its type.  For OpenMP user defined reductions, we need
-   them instantiated for reduction clauses which inline them by hand
-   directly.  */
+/* If DECL is a function or variable template specialization, instantiate
+   its definition now.  */
 
 void
 maybe_instantiate_decl (tree decl)
 {
-  if (DECL_LANG_SPECIFIC (decl)
+  if (VAR_OR_FUNCTION_DECL_P (decl)
+      && DECL_LANG_SPECIFIC (decl)
       && DECL_TEMPLATE_INFO (decl)
-      && (decl_maybe_constant_var_p (decl)
-	  || (TREE_CODE (decl) == FUNCTION_DECL
-	      && DECL_OMP_DECLARE_REDUCTION_P (decl))
-	  || undeduced_auto_decl (decl))
       && !DECL_DECLARED_CONCEPT_P (decl)
       && !uses_template_parms (DECL_TI_ARGS (decl)))
     {
@@ -5755,15 +5691,13 @@ mark_used (tree decl, tsubst_flags_t complain)
       return false;
     }
 
-  /* Normally, we can wait until instantiation-time to synthesize DECL.
-     However, if DECL is a static data member initialized with a constant
-     or a constexpr function, we need it right now because a reference to
-     such a data member or a call to such function is not value-dependent.
-     For a function that uses auto in the return type, we need to instantiate
-     it to find out its type.  For OpenMP user defined reductions, we need
-     them instantiated for reduction clauses which inline them by hand
-     directly.  */
-  maybe_instantiate_decl (decl);
+  /* If DECL has a deduced return type, we need to instantiate it now to
+     find out its type.  For OpenMP user defined reductions, we need them
+     instantiated for reduction clauses which inline them by hand directly.  */
+  if (undeduced_auto_decl (decl)
+      || (TREE_CODE (decl) == FUNCTION_DECL
+	  && DECL_OMP_DECLARE_REDUCTION_P (decl)))
+    maybe_instantiate_decl (decl);
 
   if (processing_template_decl || in_template_function ())
     return true;
