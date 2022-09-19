@@ -2579,7 +2579,7 @@ static void cp_parser_explicit_specialization
 /* Exception handling [gram.except] */
 
 static tree cp_parser_try_block
-  (cp_parser *);
+  (cp_parser *, tree);
 static void cp_parser_function_try_block
   (cp_parser *);
 static void cp_parser_handler_seq
@@ -12435,7 +12435,7 @@ cp_parser_statement (cp_parser* parser, tree in_statement_expr,
 
 	case RID_TRY:
 	  std_attrs = process_stmt_hotness_attribute (std_attrs, attrs_loc);
-	  statement = cp_parser_try_block (parser);
+	  statement = cp_parser_try_block (parser, std_attrs);
 	  break;
 
 	case RID_NAMESPACE:
@@ -28345,7 +28345,7 @@ cp_parser_type_id_list (cp_parser* parser)
      try compound-statement handler-seq  */
 
 static tree
-cp_parser_try_block (cp_parser* parser)
+cp_parser_try_block (cp_parser* parser, tree attributes)
 {
   tree try_block;
 
@@ -28425,15 +28425,13 @@ cp_parser_handler (cp_parser* parser)
 {
   tree handler;
   tree declaration;
-  tree std_attrs;
 
   cp_parser_require_keyword (parser, RID_CATCH, RT_CATCH);
   handler = begin_handler ();
   matching_parens parens;
   parens.require_open (parser);
-  std_attrs = cp_parser_std_attribute_spec_seq (parser);
   declaration = cp_parser_exception_declaration (parser);
-  finish_handler_parms (std_attrs, declaration, handler);
+  finish_handler_parms (declaration, handler);
   parens.require_close (parser);
   cp_parser_compound_statement (parser, NULL, BCS_NORMAL, false);
   finish_handler (handler);
@@ -28442,9 +28440,10 @@ cp_parser_handler (cp_parser* parser)
 /* Parse an exception-declaration.
 
    exception-declaration:
-     attribute-specifier-seq [opt] type-specifier-seq declarator
-     attribute-specifier-seq [opt] type-specifier-seq abstract-declarator [opt]
-     attribute-specifier-seq [opt] ...
+     type-specifier-seq declarator
+     type-specifier-seq abstract-declarator
+     type-specifier-seq
+     ...
 
    Returns a VAR_DECL for the declaration, or NULL_TREE if the
    ellipsis variant is used.  */

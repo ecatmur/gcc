@@ -32,11 +32,11 @@ void test_throw()
 void test01()
 {
   std::string s;
-  try
+  [[with_stacktrace]] try
     {
       test_throw();
     }
-  catch([[with_stacktrace]] std::exception& e)
+  catch(std::exception& e)
     {
       s = e.what();
     }
@@ -46,11 +46,11 @@ void test01()
 void test02()
 {
   std::stacktrace st;
-  try
+  [[with_stacktrace]] try
     {
       test_throw();
     }
-  catch([[with_stacktrace]] const std::exception& e)
+  catch(const std::exception& e)
     {
       st = std::stacktrace::from_current_exception();
     }
@@ -61,11 +61,11 @@ void test02()
 void test03()
 {
   std::string s;
-  try
+  [[with_stacktrace]] try
     {
       test_throw();
     }
-  catch([[with_stacktrace]] ...)
+  catch(...)
     {
       try
 	{
@@ -94,10 +94,33 @@ void test04()
   VERIFY(s.contains("test_throw"));
 }
 
+void test05()
+{
+  std::stacktrace st;
+  [[with_stacktrace]] try
+    {
+      test_throw();
+    }
+  catch(...)
+    {
+      try
+	{
+	  throw;
+	}
+      catch(std::exception& e)
+	{
+	  st = std::stacktrace::from_current_exception();
+	}
+    }
+  std::string s = std::to_string(st);
+  VERIFY(s.contains("test_throw"));
+}
+
 int main()
 {
   test01();
   test02();
   test03();
   test04();
+  test05();
 }
