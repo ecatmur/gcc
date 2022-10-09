@@ -1,7 +1,8 @@
 // { dg-options "-Wfunctional-cast=1" }
 // Warn on functional cast interpreted as reinterpret_cast to indirect type.
 
-using T = char*;
-using U = char&;
-T p = T(0x12345678); // { dg-warning "functional cast" }
-U r = U(p); // { dg-warning "functional cast" }
+__UINTPTR_TYPE__ i = 0x12345678;
+typedef char *T;
+T p = T(i); // { dg-warning "functional cast" }
+typedef char &U;
+U r = U(i); // { dg-warning "functional cast" }
