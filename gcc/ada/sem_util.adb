@@ -531,7 +531,7 @@ package body Sem_Util is
 
       --  Local variables
 
-      E   : Entity_Id := Original_Node (Expr);
+      E   : Node_Id := Original_Node (Expr);
       Pre : Node_Id;
 
    --  Start of processing for Accessibility_Level
@@ -777,8 +777,18 @@ package body Sem_Util is
 
          --  We don't handle function calls in prefix notation correctly ???
 
-         when N_Indexed_Component | N_Selected_Component =>
-            Pre := Original_Node (Prefix (E));
+         when N_Indexed_Component | N_Selected_Component | N_Slice =>
+            Pre := Prefix (E);
+
+            --  Fetch the original node when the prefix comes from the result
+            --  of expanding a function call since we want to find the level
+            --  of the original source call.
+
+            if not Comes_From_Source (Pre)
+              and then Nkind (Original_Node (Pre)) = N_Function_Call
+            then
+               Pre := Original_Node (Pre);
+            end if;
 
             --  When E is an indexed component or selected component and
             --  the current Expr is a function call, we know that we are
@@ -6008,8 +6018,11 @@ package body Sem_Util is
                Append_New_Elmt (Item_Id, States);
 
             --  Recursively gather the visible states of a nested package
+            --  except for nested package renamings.
 
-            elsif Ekind (Item_Id) = E_Package then
+            elsif Ekind (Item_Id) = E_Package
+              and then No (Renamed_Entity (Item_Id))
+            then
                Collect_Visible_States (Item_Id, States);
             end if;
 
@@ -26548,6 +26561,14 @@ package body Sem_Util is
       if Nkind (Item) = N_Pragma then
          Item_Nam :=
            Chars (Original_Node (Pragma_Identifier (Original_Node (Item))));
+
+         if Item_Nam = Name_Check then
+            --  Pragma "Check" preserves the original pragma name as its first
+            --  argument.
+            Item_Nam :=
+              Chars (Expression (First (Pragma_Argument_Associations
+                (Original_Node (Item)))));
+         end if;
 
       else
          pragma Assert (Nkind (Item) = N_Aspect_Specification);

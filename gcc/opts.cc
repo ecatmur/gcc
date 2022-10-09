@@ -1288,8 +1288,9 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 	   "%<-fsanitize=kernel-address%>");
 
   /* Currently live patching is not support for LTO.  */
-  if (opts->x_flag_live_patching && opts->x_flag_lto)
-    sorry ("live patching is not supported with LTO");
+  if (opts->x_flag_live_patching == LIVE_PATCHING_INLINE_ONLY_STATIC && opts->x_flag_lto)
+    sorry ("live patching (with %qs) is not supported with LTO",
+	   "inline-only-static");
 
   /* Currently vtable verification is not supported for LTO */
   if (opts->x_flag_vtable_verify && opts->x_flag_lto)
@@ -1801,7 +1802,7 @@ print_filtered_help (unsigned int include_flags,
 	  help = new_help;
 	}
 
-      if (option->range_max != -1)
+      if (option->range_max != -1 && tab == NULL)
 	{
 	  char b[128];
 	  snprintf (b, sizeof (b), "<%d,%d>", option->range_min,

@@ -2737,6 +2737,7 @@ enum tree_tag {
   tt_tinfo_var,		/* Typeinfo object. */
   tt_tinfo_typedef,	/* Typeinfo typedef.  */
   tt_ptrmem_type,	/* Pointer to member type.  */
+  tt_nttp_var,		/* NTTP_OBJECT VAR_DECL.  */
 
   tt_parm,		/* Function parameter or result.  */
   tt_enum_value,	/* An enum value.  */
@@ -3468,6 +3469,20 @@ enum streamed_extensions {
   SE_BITS = 1
 };
 
+/* Counter indices.  */
+enum module_state_counts
+{
+  MSC_sec_lwm,
+  MSC_sec_hwm,
+  MSC_pendings,
+  MSC_entities,
+  MSC_namespaces,
+  MSC_bindings,
+  MSC_macros,
+  MSC_inits,
+  MSC_HWM
+};
+
 /********************************************************************/
 struct module_state_config;
 
@@ -3665,8 +3680,8 @@ class GTY((chain_next ("%h.parent"), for_user)) module_state {
  private:
   void write_config (elf_out *to, struct module_state_config &, unsigned crc);
   bool read_config (struct module_state_config &);
-  static void write_counts (elf_out *to, unsigned [], unsigned *crc_ptr);
-  bool read_counts (unsigned []);
+  static void write_counts (elf_out *to, unsigned [MSC_HWM], unsigned *crc_ptr);
+  bool read_counts (unsigned *);
 
  public:
   void note_cmi_name ();
@@ -5396,6 +5411,9 @@ trees_out::core_bools (tree t)
 
 	    case VAR_DECL:
 	      if (TREE_PUBLIC (t)
+		  && !(TREE_STATIC (t)
+		       && DECL_FUNCTION_SCOPE_P (t)
+		       && DECL_DECLARED_INLINE_P (DECL_CONTEXT (t)))
 		  && !DECL_VAR_DECLARED_INLINE_P (t))
 		is_external = true;
 	      break;
@@ -5415,6 +5433,7 @@ trees_out::core_bools (tree t)
       WB (t->decl_common.decl_by_reference_flag);
       WB (t->decl_common.decl_read_flag);
       WB (t->decl_common.decl_nonshareable_flag);
+      WB (t->decl_common.decl_not_flexarray);
     }
 
   if (CODE_CONTAINS_STRUCT (code, TS_DECL_WITH_VIS))
@@ -5559,6 +5578,7 @@ trees_in::core_bools (tree t)
       RB (t->decl_common.decl_by_reference_flag);
       RB (t->decl_common.decl_read_flag);
       RB (t->decl_common.decl_nonshareable_flag);
+      RB (t->decl_common.decl_not_flexarray);
     }
 
   if (CODE_CONTAINS_STRUCT (code, TS_DECL_WITH_VIS))
@@ -7789,8 +7809,9 @@ trees_out::decl_value (tree decl, depset *dep)
 	    }
 	  else
 	    {
-	      tree_node (CLASSTYPE_TI_TEMPLATE (TREE_TYPE (inner)));
-	      tree_node (CLASSTYPE_TI_ARGS (TREE_TYPE (inner)));
+	      tree ti = get_template_info (inner);
+	      tree_node (TI_TEMPLATE (ti));
+	      tree_node (TI_ARGS (ti));
 	    }
 	}
       tree_node (get_constraints (decl));
@@ -8184,13 +8205,18 @@ trees_in::decl_value ()
 	/* Set the TEMPLATE_DECL's type.  */
 	TREE_TYPE (decl) = TREE_TYPE (inner);
 
-      if (mk & MK_template_mask
-	  || mk == MK_partial)
+      /* Add to specialization tables now that constraints etc are
+	 added.  */
+      if (mk == MK_partial)
 	{
-	  /* Add to specialization tables now that constraints etc are
-	     added.  */
-	  bool is_type = mk == MK_partial || !(mk & MK_tmpl_decl_mask);
-
+	  bool is_type = TREE_CODE (inner) == TYPE_DECL;
+	  spec.spec = is_type ? type : inner;
+	  add_mergeable_specialization (!is_type, false,
+					&spec, decl, spec_flags);
+	}
+      else if (mk & MK_template_mask)
+	{
+	  bool is_type = !(mk & MK_tmpl_decl_mask);
 	  spec.spec = is_type ? type : mk & MK_tmpl_tmpl_mask ? inner : decl;
 	  add_mergeable_specialization (!is_type,
 					!is_type && mk & MK_tmpl_alias_mask,
@@ -8542,6 +8568,21 @@ trees_out::decl_node (tree decl, walk_kind ref)
 	    }
 	  return false;
 	}
+
+      if (DECL_NTTP_OBJECT_P (decl))
+	{
+	  /* A NTTP parm object.  */
+	  if (streaming_p ())
+	    i (tt_nttp_var);
+	  tree_node (tparm_object_argument (decl));
+	  tree_node (DECL_NAME (decl));
+	  int tag = insert (decl);
+	  if (streaming_p ())
+	    dump (dumper::TREE)
+	      && dump ("Wrote nttp object:%d %N", tag, DECL_NAME (decl));
+	  return false;
+	}
+
       break;
 
     case TYPE_DECL:
@@ -8904,7 +8945,6 @@ trees_out::type_node (tree type)
 
     case DECLTYPE_TYPE:
     case TYPEOF_TYPE:
-    case UNDERLYING_TYPE:
     case DEPENDENT_OPERATOR_TYPE:
       tree_node (TYPE_VALUES_RAW (type));
       if (TREE_CODE (type) == DECLTYPE_TYPE)
@@ -8912,6 +8952,12 @@ trees_out::type_node (tree type)
 	   flags.  */
 	if (streaming_p ())
 	  tree_node_bools (type);
+      break;
+
+    case TRAIT_TYPE:
+      tree_node (TRAIT_TYPE_KIND_RAW (type));
+      tree_node (TRAIT_TYPE_TYPE1 (type));
+      tree_node (TRAIT_TYPE_TYPE2 (type));
       break;
 
     case TYPE_ARGUMENT_PACK:
@@ -8922,6 +8968,7 @@ trees_out::type_node (tree type)
       if (streaming_p ())
 	u (PACK_EXPANSION_LOCAL_P (type));
       tree_node (PACK_EXPANSION_PARAMETER_PACKS (type));
+      tree_node (PACK_EXPANSION_EXTRA_ARGS (type));
       break;
 
     case TYPENAME_TYPE:
@@ -9427,7 +9474,6 @@ trees_in::tree_node (bool is_use)
 
 	  case DECLTYPE_TYPE:
 	  case TYPEOF_TYPE:
-	  case UNDERLYING_TYPE:
 	  case DEPENDENT_OPERATOR_TYPE:
 	    {
 	      tree expr = tree_node ();
@@ -9437,6 +9483,22 @@ trees_in::tree_node (bool is_use)
 		  TYPE_VALUES_RAW (res) = expr;
 		  if (code == DECLTYPE_TYPE)
 		    tree_node_bools (res);
+		  SET_TYPE_STRUCTURAL_EQUALITY (res);
+		}
+	    }
+	    break;
+
+	  case TRAIT_TYPE:
+	    {
+	      tree kind = tree_node ();
+	      tree type1 = tree_node ();
+	      tree type2 = tree_node ();
+	      if (!get_overrun ())
+		{
+		  res = cxx_make_type (TRAIT_TYPE);
+		  TRAIT_TYPE_KIND_RAW (res) = kind;
+		  TRAIT_TYPE_TYPE1 (res) = type1;
+		  TRAIT_TYPE_TYPE2 (res) = type2;
 		  SET_TYPE_STRUCTURAL_EQUALITY (res);
 		}
 	    }
@@ -9455,12 +9517,14 @@ trees_in::tree_node (bool is_use)
 	    {
 	      bool local = u ();
 	      tree param_packs = tree_node ();
+	      tree extra_args = tree_node ();
 	      if (!get_overrun ())
 		{
 		  tree expn = cxx_make_type (TYPE_PACK_EXPANSION);
 		  SET_TYPE_STRUCTURAL_EQUALITY (expn);
 		  PACK_EXPANSION_PATTERN (expn) = res;
 		  PACK_EXPANSION_PARAMETER_PACKS (expn) = param_packs;
+		  PACK_EXPANSION_EXTRA_ARGS (expn) = extra_args;
 		  PACK_EXPANSION_LOCAL_P (expn) = local;
 		  res = expn;
 		}
@@ -9615,6 +9679,21 @@ trees_in::tree_node (bool is_use)
 	  }
 	else
 	  set_overrun ();
+      }
+      break;
+
+    case tt_nttp_var:
+      /* An NTTP object. */
+      {
+	tree init = tree_node ();
+	tree name = tree_node ();
+	if (!get_overrun ())
+	  {
+	    res = get_template_parm_object (init, name);
+	    int tag = insert (res);
+	    dump (dumper::TREE)
+	      && dump ("Created nttp object:%d %N", tag, name);
+	  }
       }
       break;
 
@@ -10622,9 +10701,10 @@ trees_out::key_mergeable (int tag, merge_kind mk, tree decl, tree inner,
 
 	case MK_partial:
 	  {
+	    tree ti = get_template_info (inner);
 	    key.constraints = get_constraints (inner);
-	    key.ret = CLASSTYPE_TI_TEMPLATE (TREE_TYPE (inner));
-	    key.args = CLASSTYPE_TI_ARGS (TREE_TYPE (inner));
+	    key.ret = TI_TEMPLATE (ti);
+	    key.args = TI_ARGS (ti);
 	  }
 	  break;
 	}
@@ -10863,8 +10943,8 @@ trees_in::key_mergeable (int tag, merge_kind mk, tree decl, tree inner,
 	       spec; spec = TREE_CHAIN (spec))
 	    {
 	      tree tmpl = TREE_VALUE (spec);
-	      if (template_args_equal (key.args,
-				       CLASSTYPE_TI_ARGS (TREE_TYPE (tmpl)))
+	      tree ti = get_template_info (tmpl);
+	      if (template_args_equal (key.args, TI_ARGS (ti))
 		  && cp_tree_equal (key.constraints,
 				    get_constraints
 				    (DECL_TEMPLATE_RESULT (tmpl))))
@@ -11378,8 +11458,7 @@ has_definition (tree decl)
 
     case VAR_DECL:
       if (DECL_LANG_SPECIFIC (decl)
-	  && DECL_TEMPLATE_INFO (decl)
-	  && DECL_USE_TEMPLATE (decl) < 2)
+	  && DECL_TEMPLATE_INFO (decl))
 	return DECL_INITIAL (decl);
       else
 	{
@@ -11842,7 +11921,11 @@ trees_out::mark_class_def (tree defn)
 	mark_class_member (member);
 	if (TREE_CODE (member) == FIELD_DECL)
 	  if (tree repr = DECL_BIT_FIELD_REPRESENTATIVE (member))
-	    mark_declaration (repr, false);
+	    /* If we're marking a class template definition, then
+	       this'll contain the width (as set by grokbitfield)
+	       instead of a decl.  */
+	    if (DECL_P (repr))
+	      mark_declaration (repr, false);
       }
 
   /* Mark the binfo hierarchy.  */
@@ -12495,11 +12578,14 @@ depset::hash::make_dependency (tree decl, entity_kind ek)
 
   if (!dep)
     {
-      if (DECL_IMPLICIT_TYPEDEF_P (decl)
-	  /* ... not an enum, for instance.  */
-	  && RECORD_OR_UNION_TYPE_P (TREE_TYPE (decl))
-	  && TYPE_LANG_SPECIFIC (TREE_TYPE (decl))
-	  && CLASSTYPE_USE_TEMPLATE (TREE_TYPE (decl)) == 2)
+      if ((DECL_IMPLICIT_TYPEDEF_P (decl)
+	   /* ... not an enum, for instance.  */
+	   && RECORD_OR_UNION_TYPE_P (TREE_TYPE (decl))
+	   && TYPE_LANG_SPECIFIC (TREE_TYPE (decl))
+	   && CLASSTYPE_USE_TEMPLATE (TREE_TYPE (decl)) == 2)
+	  || (VAR_P (decl)
+	      && DECL_LANG_SPECIFIC (decl)
+	      && DECL_USE_TEMPLATE (decl) == 2))
 	{
 	  /* A partial or explicit specialization. Partial
 	     specializations might not be in the hash table, because
@@ -12512,7 +12598,7 @@ depset::hash::make_dependency (tree decl, entity_kind ek)
 	     dep_hash, and then convert the dep we just found into a
 	     redirect.  */
 
-	  tree ti = TYPE_TEMPLATE_INFO (TREE_TYPE (decl));
+	  tree ti = get_template_info (decl);
 	  tree tmpl = TI_TEMPLATE (ti);
 	  tree partial = NULL_TREE;
 	  for (tree spec = DECL_TEMPLATE_SPECIALIZATIONS (tmpl);
@@ -12746,6 +12832,10 @@ depset::hash::add_binding_entity (tree decl, WMB_Flags flags, void *data_)
 	   || TREE_CODE (decl) == TYPE_DECL)
 	  && DECL_TINFO_P (decl))
 	/* Ignore TINFO things.  */
+	return false;
+
+      if (TREE_CODE (decl) == VAR_DECL && DECL_NTTP_OBJECT_P (decl))
+	/* Ignore NTTP objects.  */
 	return false;
 
       if (!(flags & WMB_Using) && CP_DECL_CONTEXT (decl) != data->ns)
@@ -14476,20 +14566,6 @@ module_state::read_partitions (unsigned count)
   return true;
 }
 
-/* Counter indices.  */
-enum module_state_counts
-{
-  MSC_sec_lwm,
-  MSC_sec_hwm,
-  MSC_pendings,
-  MSC_entities,
-  MSC_namespaces,
-  MSC_bindings,
-  MSC_macros,
-  MSC_inits,
-  MSC_HWM
-};
-
 /* Data for config reading and writing.  */
 struct module_state_config {
   const char *dialect_str;
@@ -15767,6 +15843,8 @@ module_state::write_location (bytes_out &sec, location_t loc)
 	range.m_start = UNKNOWN_LOCATION;
       write_location (sec, range.m_start);
       write_location (sec, range.m_finish);
+      unsigned discriminator = get_discriminator_from_adhoc_loc (line_table, loc);
+      sec.u (discriminator);
     }
   else if (loc >= LINEMAPS_MACRO_LOWEST_LOCATION (line_table))
     {
@@ -15892,8 +15970,9 @@ module_state::read_location (bytes_in &sec) const
 	if (range.m_start == UNKNOWN_LOCATION)
 	  range.m_start = locus;
 	range.m_finish = read_location (sec);
+	unsigned discriminator = sec.u ();
 	if (locus != loc && range.m_start != loc && range.m_finish != loc)
-	  locus = get_combined_adhoc_loc (line_table, locus, range, NULL);
+	  locus = get_combined_adhoc_loc (line_table, locus, range, NULL, discriminator);
       }
       break;
 

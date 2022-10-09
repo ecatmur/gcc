@@ -635,61 +635,6 @@ equiv_oracle::dump (FILE *f) const
 
 
 // --------------------------------------------------------------------------
-
-// The value-relation class is used to encapsulate the represention of an
-// individual relation between 2 ssa-names, and to facilitate operating on
-// the relation.
-
-class value_relation
-{
-public:
-  value_relation ();
-  value_relation (relation_kind kind, tree n1, tree n2);
-  void set_relation (relation_kind kind, tree n1, tree n2);
-
-  inline relation_kind kind () const { return related; }
-  inline tree op1 () const { return name1; }
-  inline tree op2 () const { return name2; }
-
-  bool union_ (value_relation &p);
-  bool intersect (value_relation &p);
-  void negate ();
-  bool apply_transitive (const value_relation &rel);
-
-  void dump (FILE *f) const;
-private:
-  relation_kind related;
-  tree name1, name2;
-};
-
-// Set relation R between ssa_name N1 and N2.
-
-inline void
-value_relation::set_relation (relation_kind r, tree n1, tree n2)
-{
-  related = r;
-  name1 = n1;
-  name2 = n2;
-}
-
-// Default constructor.
-
-inline
-value_relation::value_relation ()
-{
-  related = VREL_VARYING;
-  name1 = NULL_TREE;
-  name2 = NULL_TREE;
-}
-
-// Constructor for relation R between SSA version N1 nd N2.
-
-inline
-value_relation::value_relation (relation_kind kind, tree n1, tree n2)
-{
-  set_relation (kind, n1, n2);
-}
-
 // Negate the current relation.
 
 void
@@ -1010,7 +955,7 @@ dom_oracle::set_one_relation (basic_block bb, relation_kind k, tree op1,
 	  ptr->dump (dump_file);
 	}
       // Check into whether we can simply replace the relation rather than
-      // intersecting it.  THis may help with some optimistic iterative
+      // intersecting it.  This may help with some optimistic iterative
       // updating algorithms.
       bool new_rel = ptr->intersect (vr);
       if (dump_file && (dump_flags & TDF_DETAILS))

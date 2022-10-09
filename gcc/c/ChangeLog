@@ -1,3 +1,127 @@
+2022-10-07  Qing Zhao  <qing.zhao@oracle.com>
+
+	* c-decl.cc (flexible_array_member_type_p): New function.
+	(one_element_array_type_p): Likewise.
+	(zero_length_array_type_p): Likewise.
+	(add_flexible_array_elts_to_size): Call new utility
+	routine flexible_array_member_type_p.
+	(is_flexible_array_member_p): New function.
+	(finish_struct): Set the new DECL_NOT_FLEXARRAY flag.
+
+2022-10-06  Joseph Myers  <joseph@codesourcery.com>
+
+	* c-parser.cc (c_parse_init): Add D_EXT11 to mask if flag_no_asm
+	and not C2x.
+	(c_keyword_starts_typename, c_token_starts_declspecs)
+	(c_parser_declspecs, c_parser_objc_selector): Handle
+	RID_TYPEOF_UNQUAL.
+	(c_parser_typeof_specifier): Handle RID_TYPEOF_UNQUAL.
+	Distinguish typeof for C2x from __typeof__ for all standard
+	versions and typeof before C2x.
+	* c-typeck.cc (build_function_call_vec): Use unqualified version
+	of non-void return type.
+	(build_unary_op): Use unqualified type for increment and
+	decrement.
+
+2022-10-06  Jakub Jelinek  <jakub@redhat.com>
+
+	* c-parser.cc (c_parser_omp_assumption_clauses): Emit IFN_ASSUME
+	call for holds clause on assume construct.
+
+2022-10-06  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/106654
+	* c-parser.cc (handle_assume_attribute): New function.
+	(c_parser_declaration_or_fndef): Handle assume attribute.
+	(c_parser_attribute_arguments): Add assume_attr argument,
+	if true, parse first argument as conditional expression.
+	(c_parser_gnu_attribute, c_parser_std_attribute): Adjust
+	c_parser_attribute_arguments callers.
+	(c_parser_statement_after_labels) <case RID_ATTRIBUTE>: Handle
+	assume attribute.
+
+2022-10-04  Jakub Jelinek  <jakub@redhat.com>
+
+	* c-lang.h (struct c_omp_declare_target_attr): New type.
+	(current_omp_declare_target_attribute): Change type from
+	int to vec<c_omp_declare_target_attr, va_gc> *.
+	* c-parser.cc (c_parser_translation_unit): Adjust for that change.
+	If last pushed directive was begin declare target, use different
+	wording and simplify format strings for easier translations.
+	(c_parser_omp_clause_device_type): Uncomment
+	check_no_duplicate_clause call.
+	(c_parser_omp_declare_target): Adjust for the
+	current_omp_declare_target_attribute type change, push { -1 }.
+	Use error_at rather than warning_at for declare target with
+	only device_type clauses.
+	(OMP_BEGIN_DECLARE_TARGET_CLAUSE_MASK): Define.
+	(c_parser_omp_begin): Add begin declare target support.
+	(c_parser_omp_end): Adjust for the
+	current_omp_declare_target_attribute type change, adjust
+	diagnostics wording and simplify format strings for easier
+	translations.
+	* c-decl.cc (current_omp_declare_target_attribute): Change type from
+	int to vec<c_omp_declare_target_attr, va_gc> *.
+	(c_decl_attributes): Adjust for the
+	current_omp_declare_target_attribute type change.  If device_type
+	was present on begin declare target, add "omp declare target host"
+	and/or "omp declare target nohost" attributes.
+
+2022-09-29  Joseph Myers  <joseph@codesourcery.com>
+
+	* c-decl.cc (handle_std_noreturn_attribute): New function.
+	(std_attribute_table): Add _Noreturn and noreturn.
+
+2022-09-27  Jakub Jelinek  <jakub@redhat.com>
+
+	* c-lang.h (current_omp_begin_assumes): Declare.
+	* c-parser.cc: Include bitmap.h.
+	(c_parser_omp_end_declare_target): Rename to ...
+	(c_parser_omp_end): ... this.  Handle also end assumes.
+	(c_parser_omp_begin, c_parser_omp_assumption_clauses,
+	c_parser_omp_assumes, c_parser_omp_assume): New functions.
+	(c_parser_translation_unit): Also diagnose #pragma omp begin assumes
+	without corresponding #pragma omp end assumes.
+	(c_parser_pragma): Use %s in may only be used at file scope
+	diagnostics to decrease number of translatable messages.  Handle
+	PRAGMA_OMP_BEGIN and PRAGMA_OMP_ASSUMES.  Handle PRAGMA_OMP_END
+	rather than PRAGMA_OMP_END_DECLARE_TARGET and call c_parser_omp_end
+	for it rather than c_parser_omp_end_declare_target.
+	(c_parser_omp_construct): Handle PRAGMA_OMP_ASSUME.
+	* c-decl.cc (current_omp_begin_assumes): Define.
+
+2022-09-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/106981
+	* c-typeck.cc (c_tree_equal): Only strip NON_LVALUE_EXPRs at the
+	start.  For CONSTANT_CLASS_P or CASE_CONVERT: return false if t1 and
+	t2 have different types.
+
+2022-09-22  David Malcolm  <dmalcolm@redhat.com>
+
+	PR c/106830
+	* c-parser.cc (c_parser_initelt): Initialize m_decimal.
+	(c_parser_cast_expression): Likewise.
+	(c_parser_alignof_expression): Likewise.
+	(c_parser_postfix_expression_after_paren_type): Likewise.
+	(c_parser_postfix_expression_after_primary): Likewise.
+	(c_parser_expression): Likewise.
+	(c_parser_omp_variable_list): Likewise.
+	(c_parser_transaction_expression): Likewise.
+	* c-tree.h (c_expr::set_error): Likewise.
+	* c-typeck.cc (c_expr_sizeof_expr): Likewise.
+	(parser_build_unary_op): Likewise.
+	(parser_build_binary_op): Likewise.
+	(digest_init): Likewise.
+	(pop_init_level): Likewise.
+	* gimple-parser.cc (c_parser_gimple_call_internal): Likewise.
+
+2022-09-19  Marek Polacek  <polacek@redhat.com>
+
+	PR c/106947
+	* c-typeck.cc (maybe_warn_for_null_address): Don't emit stray
+	notes.
+
 2022-09-15  Richard Biener  <rguenther@suse.de>
 
 	* c-decl.cc (build_void_list_node): Remove.

@@ -831,21 +831,19 @@ proper position among the other output files.  */
 #define LINK_COMPRESS_DEBUG_SPEC \
 	" %{gz*:%e-gz is not supported in this configuration} "
 #elif HAVE_LD_COMPRESS_DEBUG == 1
-/* GNU style on input, GNU ld options.  Reject, not useful.  */
-#define LINK_COMPRESS_DEBUG_SPEC \
-	" %{gz*:%e-gz is not supported in this configuration} "
-#elif HAVE_LD_COMPRESS_DEBUG == 2
-/* GNU style, GNU gold options.  */
-#define LINK_COMPRESS_DEBUG_SPEC \
-	" %{gz|gz=zlib-gnu:" LD_COMPRESS_DEBUG_OPTION "=zlib}" \
-	" %{gz=none:"        LD_COMPRESS_DEBUG_OPTION "=none}" \
-	" %{gz=zlib:%e-gz=zlib is not supported in this configuration} "
-#elif HAVE_LD_COMPRESS_DEBUG == 3
 /* ELF gABI style.  */
 #define LINK_COMPRESS_DEBUG_SPEC \
 	" %{gz|gz=zlib:"  LD_COMPRESS_DEBUG_OPTION "=zlib}" \
 	" %{gz=none:"	  LD_COMPRESS_DEBUG_OPTION "=none}" \
-	" %{gz=zlib-gnu:" LD_COMPRESS_DEBUG_OPTION "=zlib-gnu} "
+	" %{gz*:%e-gz=zstd is not supported in this configuration} " \
+	" %{gz=zlib-gnu:}" /* Ignore silently zlib-gnu option value.  */
+#elif HAVE_LD_COMPRESS_DEBUG == 2
+/* ELF gABI style and ZSTD.  */
+#define LINK_COMPRESS_DEBUG_SPEC \
+	" %{gz|gz=zlib:"  LD_COMPRESS_DEBUG_OPTION "=zlib}" \
+	" %{gz=none:"	  LD_COMPRESS_DEBUG_OPTION "=none}" \
+	" %{gz=zstd:"	  LD_COMPRESS_DEBUG_OPTION "=zstd}" \
+	" %{gz=zlib-gnu:}" /* Ignore silently zlib-gnu option value.  */
 #else
 #error Unknown value for HAVE_LD_COMPRESS_DEBUG.
 #endif
@@ -885,31 +883,32 @@ proper position among the other output files.  */
 #endif
 
 /* Assembler options for compressed debug sections.  */
-#if HAVE_LD_COMPRESS_DEBUG < 2
+#if HAVE_LD_COMPRESS_DEBUG == 0
 /* Reject if the linker cannot write compressed debug sections.  */
 #define ASM_COMPRESS_DEBUG_SPEC \
 	" %{gz*:%e-gz is not supported in this configuration} "
-#else /* HAVE_LD_COMPRESS_DEBUG >= 2 */
+#else /* HAVE_LD_COMPRESS_DEBUG >= 1 */
 #if HAVE_AS_COMPRESS_DEBUG == 0
 /* No assembler support.  Ignore silently.  */
 #define ASM_COMPRESS_DEBUG_SPEC \
 	" %{gz*:} "
 #elif HAVE_AS_COMPRESS_DEBUG == 1
-/* GNU style, GNU as options.  */
-#define ASM_COMPRESS_DEBUG_SPEC \
-	" %{gz|gz=zlib-gnu:" AS_COMPRESS_DEBUG_OPTION "}" \
-	" %{gz=none:"        AS_NO_COMPRESS_DEBUG_OPTION "}" \
-	" %{gz=zlib:%e-gz=zlib is not supported in this configuration} "
-#elif HAVE_AS_COMPRESS_DEBUG == 2
 /* ELF gABI style.  */
 #define ASM_COMPRESS_DEBUG_SPEC \
 	" %{gz|gz=zlib:"  AS_COMPRESS_DEBUG_OPTION "=zlib}" \
 	" %{gz=none:"	  AS_COMPRESS_DEBUG_OPTION "=none}" \
-	" %{gz=zlib-gnu:" AS_COMPRESS_DEBUG_OPTION "=zlib-gnu} "
+	" %{gz=zlib-gnu:}" /* Ignore silently zlib-gnu option value.  */
+#elif HAVE_AS_COMPRESS_DEBUG == 2
+/* ELF gABI style and ZSTD.  */
+#define ASM_COMPRESS_DEBUG_SPEC \
+	" %{gz|gz=zlib:"  AS_COMPRESS_DEBUG_OPTION "=zlib}" \
+	" %{gz=none:"	  AS_COMPRESS_DEBUG_OPTION "=none}" \
+	" %{gz=zstd:"	  AS_COMPRESS_DEBUG_OPTION "=zstd}" \
+	" %{gz=zlib-gnu:}" /* Ignore silently zlib-gnu option value.  */
 #else
 #error Unknown value for HAVE_AS_COMPRESS_DEBUG.
 #endif
-#endif /* HAVE_LD_COMPRESS_DEBUG >= 2 */
+#endif /* HAVE_LD_COMPRESS_DEBUG >= 1 */
 
 /* Define ASM_DEBUG_SPEC to be a spec suitable for translating '-g'
    to the assembler, when compiling assembly sources only.  */
@@ -6416,6 +6415,18 @@ do_spec_1 (const char *spec, int inswitch, const char *soft_matched_part)
 	      if (*sysroot_hdrs_suffix_spec)
 		info.append = concat (info.append, dir_separator_str,
 				      multilib_dir, NULL);
+	      else if (multiarch_dir)
+		{
+		  /* For multiarch, search include-fixed/<multiarch-dir>
+		     before include-fixed.  */
+		  info.append = concat (info.append, dir_separator_str,
+					multiarch_dir, NULL);
+		  info.append_len = strlen (info.append);
+		  for_each_path (&include_prefixes, false, info.append_len,
+				 spec_path, &info);
+
+		  info.append = "include-fixed";
+		}
 	      info.append_len = strlen (info.append);
 	      for_each_path (&include_prefixes, false, info.append_len,
 			     spec_path, &info);

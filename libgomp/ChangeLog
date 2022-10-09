@@ -1,3 +1,27 @@
+2022-10-05  Tobias Burnus  <tobias@codesourcery.com>
+
+	* libgomp.texi (OpenMP 5.1 Impl. Status): Mark 'assume' as 'Y'.
+
+2022-10-04  Jakub Jelinek  <jakub@redhat.com>
+
+	* libgomp.texi (Support begin/end declare target syntax in C/C++):
+	Mark as implemented.
+
+2022-09-30  Tobias Burnus  <tobias@codesourcery.com>
+
+	PR fortran/105318
+	* testsuite/libgomp.fortran/is_device_ptr-2.f90: New test.
+
+2022-09-28  Tobias Burnus  <tobias@codesourcery.com>
+
+	* libgomp.texi (OpenMP 5.1): Mark 'assume' as implemented
+	for C/C++. Remove duplicated 'begin declare target' entry.
+
+2022-09-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/106981
+	* testsuite/libgomp.c-c++-common/pr106981.c: New test.
+
 2022-09-14  Julian Brown  <julian@codesourcery.com>
 
 	* testsuite/libgomp.oacc-c-c++-common/deep-copy-15.c: New test.

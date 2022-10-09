@@ -2994,6 +2994,7 @@ c_expr_sizeof_expr (location_t loc, struct c_expr expr)
       ret.value = error_mark_node;
       ret.original_code = ERROR_MARK;
       ret.original_type = NULL;
+      ret.m_decimal = 0;
       pop_maybe_used (false);
     }
   else
@@ -3017,6 +3018,7 @@ c_expr_sizeof_expr (location_t loc, struct c_expr expr)
       c_last_sizeof_loc = loc;
       ret.original_code = SIZEOF_EXPR;
       ret.original_type = NULL;
+      ret.m_decimal = 0;
       if (C_TYPE_VARIABLE_SIZE (TREE_TYPE (folded_expr)))
 	{
 	  /* sizeof is evaluated when given a vla (C99 6.5.3.4p2).  */
@@ -3047,6 +3049,7 @@ c_expr_sizeof_type (location_t loc, struct c_type_name *t)
   c_last_sizeof_loc = loc;
   ret.original_code = SIZEOF_EXPR;
   ret.original_type = NULL;
+  ret.m_decimal = 0;
   if (type == error_mark_node)
     {
       ret.value = error_mark_node;
@@ -3184,6 +3187,7 @@ build_function_call_vec (location_t loc, vec<location_t> arg_loc,
 
   /* fntype now gets the type of function pointed to.  */
   fntype = TREE_TYPE (fntype);
+  tree return_type = TREE_TYPE (fntype);
 
   /* Convert the parameters to the types declared in the
      function prototype, or apply default promotions.  */
@@ -3200,8 +3204,6 @@ build_function_call_vec (location_t loc, vec<location_t> arg_loc,
       && TREE_CODE (tem = TREE_OPERAND (tem, 0)) == FUNCTION_DECL
       && !comptypes (fntype, TREE_TYPE (tem)))
     {
-      tree return_type = TREE_TYPE (fntype);
-
       /* This situation leads to run-time undefined behavior.  We can't,
 	 therefore, simply error unless we can prove that all possible
 	 executions of the program must execute the code.  */
@@ -3226,22 +3228,25 @@ build_function_call_vec (location_t loc, vec<location_t> arg_loc,
   bool warned_p = check_function_arguments (loc, fundecl, fntype,
 					    nargs, argarray, &arg_loc);
 
+  if (TYPE_QUALS (return_type) != TYPE_UNQUALIFIED
+      && !VOID_TYPE_P (return_type))
+    return_type = c_build_qualified_type (return_type, TYPE_UNQUALIFIED);
   if (name != NULL_TREE
       && startswith (IDENTIFIER_POINTER (name), "__builtin_"))
     {
       if (require_constant_value)
 	result
-	  = fold_build_call_array_initializer_loc (loc, TREE_TYPE (fntype),
+	  = fold_build_call_array_initializer_loc (loc, return_type,
 						   function, nargs, argarray);
       else
-	result = fold_build_call_array_loc (loc, TREE_TYPE (fntype),
+	result = fold_build_call_array_loc (loc, return_type,
 					    function, nargs, argarray);
       if (TREE_CODE (result) == NOP_EXPR
 	  && TREE_CODE (TREE_OPERAND (result, 0)) == INTEGER_CST)
 	STRIP_TYPE_NOPS (result);
     }
   else
-    result = build_call_array_loc (loc, TREE_TYPE (fntype),
+    result = build_call_array_loc (loc, return_type,
 				   function, nargs, argarray);
   /* If -Wnonnull warning has been diagnosed, avoid diagnosing it again
      later.  */
@@ -3782,6 +3787,7 @@ parser_build_unary_op (location_t loc, enum tree_code code, struct c_expr arg)
 
   result.original_code = code;
   result.original_type = NULL;
+  result.m_decimal = 0;
 
   if (reject_gcc_builtin (arg.value))
     {
@@ -3844,6 +3850,7 @@ parser_build_binary_op (location_t location, enum tree_code code,
 				  arg1.value, arg2.value, true);
   result.original_code = code;
   result.original_type = NULL;
+  result.m_decimal = 0;
 
   if (TREE_CODE (result.value) == ERROR_MARK)
     {
@@ -4826,6 +4833,9 @@ build_unary_op (location_t location, enum tree_code code, tree xarg,
 	else
 	  val = build2 (code, TREE_TYPE (arg), arg, inc);
 	TREE_SIDE_EFFECTS (val) = 1;
+	if (TYPE_QUALS (TREE_TYPE (val)) != TYPE_UNQUALIFIED)
+	  TREE_TYPE (val) = c_build_qualified_type (TREE_TYPE (val),
+						    TYPE_UNQUALIFIED);
 	ret = val;
 	goto return_build_unary_op;
       }
@@ -8072,6 +8082,7 @@ digest_init (location_t init_loc, tree type, tree init, tree origtype,
 	  expr.value = inside_init;
 	  expr.original_code = (strict_string ? STRING_CST : ERROR_MARK);
 	  expr.original_type = NULL;
+	  expr.m_decimal = 0;
 	  maybe_warn_string_init (init_loc, type, expr);
 
 	  if (TYPE_DOMAIN (type) && !TYPE_MAX_VALUE (TYPE_DOMAIN (type)))
@@ -8936,6 +8947,7 @@ pop_init_level (location_t loc, int implicit,
   ret.value = NULL_TREE;
   ret.original_code = ERROR_MARK;
   ret.original_type = NULL;
+  ret.m_decimal = 0;
 
   if (implicit == 0)
     {
@@ -11738,18 +11750,19 @@ maybe_warn_for_null_address (location_t loc, tree op, tree_code code)
       || from_macro_expansion_at (loc))
     return;
 
+  bool w;
   if (code == EQ_EXPR)
-    warning_at (loc, OPT_Waddress,
-		"the comparison will always evaluate as %<false%> "
-		"for the address of %qE will never be NULL",
-		op);
+    w = warning_at (loc, OPT_Waddress,
+		    "the comparison will always evaluate as %<false%> "
+		    "for the address of %qE will never be NULL",
+		    op);
   else
-    warning_at (loc, OPT_Waddress,
-		"the comparison will always evaluate as %<true%> "
-		"for the address of %qE will never be NULL",
-		op);
+    w = warning_at (loc, OPT_Waddress,
+		    "the comparison will always evaluate as %<true%> "
+		    "for the address of %qE will never be NULL",
+		    op);
 
-  if (DECL_P (op))
+  if (w && DECL_P (op))
     inform (DECL_SOURCE_LOCATION (op), "%qD declared here", op);
 }
 
@@ -16043,14 +16056,10 @@ c_tree_equal (tree t1, tree t2)
   if (!t1 || !t2)
     return false;
 
-  for (code1 = TREE_CODE (t1);
-       CONVERT_EXPR_CODE_P (code1)
-	 || code1 == NON_LVALUE_EXPR;
+  for (code1 = TREE_CODE (t1); code1 == NON_LVALUE_EXPR;
        code1 = TREE_CODE (t1))
     t1 = TREE_OPERAND (t1, 0);
-  for (code2 = TREE_CODE (t2);
-       CONVERT_EXPR_CODE_P (code2)
-	 || code2 == NON_LVALUE_EXPR;
+  for (code2 = TREE_CODE (t2); code2 == NON_LVALUE_EXPR;
        code2 = TREE_CODE (t2))
     t2 = TREE_OPERAND (t2, 0);
 
@@ -16059,6 +16068,9 @@ c_tree_equal (tree t1, tree t2)
     return true;
 
   if (code1 != code2)
+    return false;
+
+  if (CONSTANT_CLASS_P (t1) && !comptypes (TREE_TYPE (t1), TREE_TYPE (t2)))
     return false;
 
   switch (code1)
@@ -16179,6 +16191,11 @@ c_tree_equal (tree t1, tree t2)
 	    return false;
 	return true;
       }
+
+    CASE_CONVERT:
+      if (!comptypes (TREE_TYPE (t1), TREE_TYPE (t2)))
+	return false;
+      break;
 
     default:
       break;
