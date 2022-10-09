@@ -9082,7 +9082,7 @@ cp_build_c_cast (location_t type_loc, location_t loc, tree type, tree expr,
 				&valid_p, complain);
   if (valid_p
       && c_cast_p
-      && warn_functional_cast >= 4
+      && warn_functional_cast >= 5
       && complain & tf_warning
       && complain & tf_functional_cast)
     {
@@ -9103,7 +9103,7 @@ cp_build_c_cast (location_t type_loc, location_t loc, tree type, tree expr,
       result = (build_reinterpret_cast_1
 		(loc, type, value, /*c_cast_p=*/true, &valid_p, complain));
       if (valid_p
-	  && warn_functional_cast >= 1
+	  && warn_functional_cast >= (INDIRECT_TYPE_P (type) ? 1 : 4)
 	  && complain & tf_warning
 	  && complain & tf_functional_cast)
 	{

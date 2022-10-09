@@ -730,7 +730,7 @@ C ObjC C++ LTO ObjC++ Joined RejectNegative UInteger Var(warn_format_trunc) Warn
 Warn about calls to snprintf and similar functions that truncate output.
 
 Wfunctional-cast=
-C++ ObjC++ Joined RejectNegative UInteger Var(warn_functional_cast) Warning LangEnabledBy(C++ ObjC++,Wall, 1, 0) IntegerRange(0, 4)
+C++ ObjC++ Joined RejectNegative UInteger Var(warn_functional_cast) Warning LangEnabledBy(C++ ObjC++,Wall, 1, 0) IntegerRange(0, 5)
 Warn if a functional-style cast is not accomplished by direct-initialization.
 
 Wif-not-aligned
