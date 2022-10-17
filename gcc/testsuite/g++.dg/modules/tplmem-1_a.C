@@ -12,7 +12,7 @@ export struct A
 
   template<typename T> operator T () const
   {
-    return T(99);
+    return (T)(99);
   }
 };
 

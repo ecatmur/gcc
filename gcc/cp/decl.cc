@@ -7139,7 +7139,7 @@ reshape_init (tree type, tree init, tsubst_flags_t complain)
 	{
 	  warning_sentinel w (warn_useless_cast);
 	  warning_sentinel w2 (warn_ignored_qualifiers);
-	  return cp_build_c_cast (input_location, type, elt,
+	  return cp_build_c_cast (UNKNOWN_LOCATION, input_location, type, elt,
 				  tf_warning_or_error);
 	}
       else
@@ -7446,7 +7446,8 @@ check_initializer (tree decl, tree init, int flags, vec<tree, va_gc> **cleanups)
 		new_init = build_cplus_new (type, init_code, tf_none);
 	      else if (CLASS_TYPE_P (type)
 		       && (!init || TREE_CODE (init) == TREE_LIST))
-		new_init = build_functional_cast (input_location, type,
+		new_init = build_functional_cast (UNKNOWN_LOCATION,
+						  input_location, type,
 						  init, tf_none);
 	      if (new_init)
 		{

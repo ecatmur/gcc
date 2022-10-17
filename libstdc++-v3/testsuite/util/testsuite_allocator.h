@@ -827,7 +827,7 @@ namespace __gnu_test
       // e.g. if alignment==1 don't return something aligned to 2 bytes.
       // Maybe not worth it, at least monotonic_buffer_resource will
       // never ask upstream for anything with small alignment.
-      void* p = ::operator new(bytes, std::align_val_t(alignment));
+      void* p = ::operator new(bytes, static_cast<std::align_val_t>(alignment));
       lists->active = new allocation{p, bytes, alignment, lists->active};
       return p;
     }
@@ -846,9 +846,9 @@ namespace __gnu_test
 	      if (alignment != a->alignment)
 		_S_throw<bad_alignment>();
 #if __cpp_sized_deallocation
-	      ::operator delete(p, bytes, std::align_val_t(alignment));
+	      ::operator delete(p, bytes, static_cast<std::align_val_t>(alignment));
 #else
-	      ::operator delete(p, std::align_val_t(alignment));
+	      ::operator delete(p, static_cast<std::align_val_t>(alignment));
 #endif
 	      *aptr = a->next;
 	      a->next = lists->freed;

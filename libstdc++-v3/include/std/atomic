@@ -278,7 +278,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
 	__atomic_store(std::__addressof(_M_i),
 		       __atomic_impl::__clear_padding(__i),
-		       int(__m));
+		       static_cast<int> (__m));
       }
 
       void
@@ -286,7 +286,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
 	__atomic_store(std::__addressof(_M_i),
 		       __atomic_impl::__clear_padding(__i),
-		       int(__m));
+		       static_cast<int> (__m));
       }
 
       _Tp
@@ -294,7 +294,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
 	alignas(_Tp) unsigned char __buf[sizeof(_Tp)];
 	_Tp* __ptr = reinterpret_cast<_Tp*>(__buf);
-	__atomic_load(std::__addressof(_M_i), __ptr, int(__m));
+	__atomic_load (std::__addressof (_M_i), __ptr, static_cast<int> (__m));
 	return *__ptr;
       }
 
@@ -303,7 +303,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
         alignas(_Tp) unsigned char __buf[sizeof(_Tp)];
 	_Tp* __ptr = reinterpret_cast<_Tp*>(__buf);
-	__atomic_load(std::__addressof(_M_i), __ptr, int(__m));
+	__atomic_load (std::__addressof (_M_i), __ptr, static_cast<int> (__m));
 	return *__ptr;
       }
 
@@ -314,7 +314,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	_Tp* __ptr = reinterpret_cast<_Tp*>(__buf);
 	__atomic_exchange(std::__addressof(_M_i),
 			  __atomic_impl::__clear_padding(__i),
-			  __ptr, int(__m));
+			  __ptr, static_cast<int>(__m));
 	return *__ptr;
       }
 
@@ -326,7 +326,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	_Tp* __ptr = reinterpret_cast<_Tp*>(__buf);
 	__atomic_exchange(std::__addressof(_M_i),
 			  __atomic_impl::__clear_padding(__i),
-			  __ptr, int(__m));
+			  __ptr, static_cast<int>(__m));
 	return *__ptr;
       }
 

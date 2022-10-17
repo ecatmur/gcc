@@ -77,10 +77,10 @@ public:
   void set_second (T2 *ptr) { *this = second (ptr); }
 
   // Return true if the pointer is an A pointer.
-  bool is_first () const { return !(uintptr_t (m_ptr) & 1); }
+  bool is_first () const { return !(reinterpret_cast<uintptr_t> (m_ptr) & 1); }
 
   // Return true if the pointer is a B pointer.
-  bool is_second () const { return uintptr_t (m_ptr) & 1; }
+  bool is_second () const { return reinterpret_cast<uintptr_t> (m_ptr) & 1; }
 
   // Return the contents of the pointer, given that it is known to be
   // an A pointer.
@@ -150,7 +150,7 @@ template<typename T1, typename T2>
 inline pointer_mux<T1, T2>
 pointer_mux<T1, T2>::first (T1 *ptr)
 {
-  gcc_checking_assert (!(uintptr_t (ptr) & 1));
+  gcc_checking_assert (!(reinterpret_cast<uintptr_t> (ptr) & 1));
   return reinterpret_cast<char *> (ptr);
 }
 
@@ -158,7 +158,7 @@ template<typename T1, typename T2>
 inline pointer_mux<T1, T2>
 pointer_mux<T1, T2>::second (T2 *ptr)
 {
-  gcc_checking_assert (ptr && !(uintptr_t (ptr) & 1));
+  gcc_checking_assert (ptr && !(reinterpret_cast<uintptr_t> (ptr) & 1));
   return reinterpret_cast<char *> (ptr) + 1;
 }
 
@@ -190,7 +190,8 @@ pointer_mux<T1, T2>::second_or_null () const
   // result can be reused as the pointer and so that all computation can
   // happen before a branch on null.  This reduces the number of branches
   // needed for loops.
-  return (uintptr_t (m_ptr) - 1) & 1 ? nullptr : known_second ();
+  return ((reinterpret_cast<uintptr_t> (m_ptr) - 1) & 1 ? nullptr
+	  : known_second ());
 }
 
 template<typename T1, typename T2>

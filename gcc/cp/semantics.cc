@@ -3243,7 +3243,7 @@ finish_compound_literal (tree type, tree compound_literal,
 	 that it came from T{} rather than T({}).  */
       CONSTRUCTOR_IS_DIRECT_INIT (compound_literal) = 1;
       compound_literal = build_tree_list (NULL_TREE, compound_literal);
-      return build_functional_cast (input_location, type,
+      return build_functional_cast (UNKNOWN_LOCATION, input_location, type,
 				    compound_literal, complain);
     }
 
@@ -6579,15 +6579,15 @@ cp_omp_finish_iterators (tree iter)
       begin = mark_rvalue_use (begin);
       end = mark_rvalue_use (end);
       step = mark_rvalue_use (step);
-      begin = cp_build_c_cast (input_location, type, begin,
+      begin = cp_build_c_cast (UNKNOWN_LOCATION, input_location, type, begin,
 			       tf_warning_or_error);
-      end = cp_build_c_cast (input_location, type, end,
+      end = cp_build_c_cast (UNKNOWN_LOCATION, input_location, type, end,
 			     tf_warning_or_error);
       orig_step = step;
       if (!processing_template_decl)
 	step = orig_step = save_expr (step);
       tree stype = POINTER_TYPE_P (type) ? sizetype : type;
-      step = cp_build_c_cast (input_location, stype, step,
+      step = cp_build_c_cast (UNKNOWN_LOCATION, input_location, stype, step,
 			      tf_warning_or_error);
       if (POINTER_TYPE_P (type) && !processing_template_decl)
 	{
