@@ -4878,6 +4878,10 @@ get_vec_init_expr (tree t)
 #define ANON_AGGR_TYPE_FIELD(NODE) \
   (LANG_TYPE_CLASS_CHECK (NODE)->typeinfo_var)
 
+/* The type in question for a WITH_STACKTRACE_TYPE.  */
+#define WITH_STACKTRACE_TYPE_TYPE(NODE) \
+  (TYPE_VALUES_RAW (WITH_STACKTRACE_TYPE_CHECK (NODE)))
+
 /* Define fields and accessors for nodes representing declared names.  */
 
 /* True if TYPE is an unnamed structured type with a typedef for
@@ -5317,6 +5321,7 @@ get_vec_init_expr (tree t)
 #define FN_TRY_BLOCK_P(NODE)	TREE_LANG_FLAG_3 (TRY_BLOCK_CHECK (NODE))
 #define HANDLER_PARMS(NODE)	TREE_OPERAND (HANDLER_CHECK (NODE), 0)
 #define HANDLER_BODY(NODE)	TREE_OPERAND (HANDLER_CHECK (NODE), 1)
+#define HANDLER_ATTRS(NODE)	TREE_OPERAND (HANDLER_CHECK (NODE), 2)
 #define HANDLER_TYPE(NODE)	TREE_TYPE (HANDLER_CHECK (NODE))
 
 /* CLEANUP_STMT accessors.  The statement(s) covered, the cleanup to run
@@ -7597,7 +7602,7 @@ extern void finish_function_try_block		(tree);
 extern void finish_function_handler_sequence    (tree, tree);
 extern void finish_cleanup_try_block		(tree);
 extern tree begin_handler			(void);
-extern void finish_handler_parms		(tree, tree);
+extern void finish_handler_parms		(tree, tree, tree);
 extern void finish_handler			(tree);
 extern void finish_cleanup			(tree, tree);
 extern bool is_this_parameter                   (tree);

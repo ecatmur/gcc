@@ -2497,6 +2497,7 @@ CXXABI_1.3 {
     _ZN10__cxxabiv129__pointer_to_member_type_info*;
     _ZN10__cxxabiv119__pointer_type_info*;
     _ZN10__cxxabiv120__si_class_type_info*;
+    _ZN10__cxxabiv127__with_stacktrace_type_info*;
     _ZN10__cxxabiv121__vmi_class_type_info*;
 
     # *_type_info classes, member functions
@@ -2506,6 +2507,7 @@ CXXABI_1.3 {
     _ZNK10__cxxabiv129__pointer_to_member_type_info*;
     _ZNK10__cxxabiv119__pointer_type_info*;
     _ZNK10__cxxabiv120__si_class_type_info*;
+    _ZNK10__cxxabiv127__with_stacktrace_type_info*;
     _ZNK10__cxxabiv121__vmi_class_type_info*;
 
     # virtual table
@@ -2518,6 +2520,7 @@ CXXABI_1.3 {
     _ZTVN10__cxxabiv129__pointer_to_member_type_infoE;
     _ZTVN10__cxxabiv119__pointer_type_infoE;
     _ZTVN10__cxxabiv120__si_class_type_infoE;
+    _ZTVN10__cxxabiv127__with_stacktrace_type_infoE;
     _ZTVN10__cxxabiv121__vmi_class_type_infoE;
 
     # typeinfo structure (and some names)
@@ -2533,6 +2536,7 @@ CXXABI_1.3 {
     _ZTIN10__cxxabiv129__pointer_to_member_type_infoE;
     _ZTIN10__cxxabiv119__pointer_type_infoE;
     _ZTIN10__cxxabiv120__si_class_type_infoE;
+    _ZTIN10__cxxabiv127__with_stacktrace_type_infoE;
     _ZTIN10__cxxabiv121__vmi_class_type_infoE;
 
     # typeinfo name
@@ -2548,6 +2552,7 @@ CXXABI_1.3 {
     _ZTSN10__cxxabiv129__pointer_to_member_type_infoE;
     _ZTSN10__cxxabiv119__pointer_type_infoE;
     _ZTSN10__cxxabiv120__si_class_type_infoE;
+    _ZTSN10__cxxabiv127__with_stacktrace_type_infoE;
     _ZTSN10__cxxabiv121__vmi_class_type_infoE;
 
     # __gnu_cxx::_verbose_terminate_handler()

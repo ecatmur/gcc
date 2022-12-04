@@ -167,7 +167,8 @@ am__objects_1 = array_type_info.lo atexit_arm.lo atexit_thread.lo \
 	del_opant.lo del_opsa.lo del_opva.lo del_opvant.lo \
 	del_opvsa.lo pbase_type_info.lo pmem_type_info.lo \
 	pointer_type_info.lo pure.lo si_class_type_info.lo tinfo.lo \
-	tinfo2.lo vec.lo vmi_class_type_info.lo vterminate.lo
+	tinfo2.lo vec.lo vmi_class_type_info.lo vterminate.lo \
+	with_stacktrace_type_info.lo
 @GLIBCXX_HOSTED_TRUE@am__objects_2 = cp-demangle.lo
 @ENABLE_VTABLE_VERIFY_TRUE@@VTV_CYGMIN_FALSE@am__objects_3 =  \
 @ENABLE_VTABLE_VERIFY_TRUE@@VTV_CYGMIN_FALSE@	vtv_stubs.lo
@@ -571,7 +572,8 @@ sources = \
 	tinfo2.cc \
 	vec.cc \
 	vmi_class_type_info.cc \
-	vterminate.cc
+	vterminate.cc \
+	with_stacktrace_type_info.cc
 
 @ENABLE_VTABLE_VERIFY_TRUE@@VTV_CYGMIN_FALSE@vtv_sources = \
 @ENABLE_VTABLE_VERIFY_TRUE@@VTV_CYGMIN_FALSE@	vtv_stubs.cc

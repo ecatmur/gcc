@@ -535,6 +535,29 @@ namespace __cxxabiv1
 		__upcast_result& __restrict __result) const;
   };
 
+  // Type information for [[with_stacktrace]] annotated catch decls.
+  class __with_stacktrace_type_info : public std::type_info
+  {
+  public:
+    const std::type_info* __base;
+    void (*__fn)();
+
+    explicit
+    __with_stacktrace_type_info (const char* __n,
+				 const std::type_info* __base,
+				 void (*__fn)())
+    : type_info(__n), __base(__base), __fn(__fn) { }
+
+    virtual
+    ~__with_stacktrace_type_info ();
+
+  protected:
+    // Implementation defined member functions.
+    virtual bool
+    __do_catch (const type_info* __thr_type, void** __thr_obj,
+		unsigned __outer) const;
+  };
+
   // Type information for a class with multiple and/or virtual bases.
   class __vmi_class_type_info : public __class_type_info
   {

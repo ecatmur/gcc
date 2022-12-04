@@ -108,7 +108,8 @@ sources = \
 	tinfo2.cc \
 	vec.cc \
 	vmi_class_type_info.cc \
-	vterminate.cc
+	vterminate.cc \
+	with_stacktrace_type_info.cc
 
 if ENABLE_VTABLE_VERIFY
 if !VTV_CYGMIN

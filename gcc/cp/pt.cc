@@ -19111,6 +19111,7 @@ tsubst_expr (tree t, tree args, tsubst_flags_t complain, tree in_decl,
     case HANDLER:
       {
 	tree decl = HANDLER_PARMS (t);
+	tree std_attrs = HANDLER_ATTRS (t);
 
 	if (decl)
 	  {
@@ -19122,7 +19123,7 @@ tsubst_expr (tree t, tree args, tsubst_flags_t complain, tree in_decl,
 	      DECL_TEMPLATE_INSTANTIATED (decl) = 1;
 	  }
 	stmt = begin_handler ();
-	finish_handler_parms (decl, stmt);
+	finish_handler_parms (std_attrs, decl, stmt);
 	RECUR (HANDLER_BODY (t));
 	finish_handler (stmt);
       }
