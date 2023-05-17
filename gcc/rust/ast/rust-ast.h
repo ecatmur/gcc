@@ -630,6 +630,8 @@ public:
 
   virtual ~MetaItemInner ();
 
+  virtual Location get_locus () const = 0;
+
   virtual std::string as_string () const = 0;
 
   virtual void accept_vis (ASTVisitor &vis) = 0;
@@ -771,6 +773,7 @@ public:
   DelimTokenTree (DelimTokenTree const &other)
     : delim_type (other.delim_type), locus (other.locus)
   {
+    token_trees.clear ();
     token_trees.reserve (other.token_trees.size ());
     for (const auto &e : other.token_trees)
       token_trees.push_back (e->clone_token_tree ());
@@ -782,6 +785,7 @@ public:
     delim_type = other.delim_type;
     locus = other.locus;
 
+    token_trees.clear ();
     token_trees.reserve (other.token_trees.size ());
     for (const auto &e : other.token_trees)
       token_trees.push_back (e->clone_token_tree ());
@@ -1310,6 +1314,8 @@ public:
   // Returns whether the lifetime param has any lifetime bounds.
   bool has_lifetime_bounds () const { return !lifetime_bounds.empty (); }
 
+  std::vector<Lifetime> &get_lifetime_bounds () { return lifetime_bounds; }
+
   // Returns whether the lifetime param has an outer attribute.
   bool has_outer_attribute () const { return !outer_attr.is_empty (); }
 
@@ -1348,21 +1354,19 @@ protected:
   }
 };
 
-// A macro item AST node - abstract base class
-class MacroItem : public Item
-{
-};
-
 // Item used in trait declarations - abstract base class
 class TraitItem
 {
 protected:
-  TraitItem () : node_id (Analysis::Mappings::get ()->get_next_node_id ()) {}
+  TraitItem (Location locus)
+    : node_id (Analysis::Mappings::get ()->get_next_node_id ()), locus (locus)
+  {}
 
   // Clone function implementation as pure virtual method
   virtual TraitItem *clone_trait_item_impl () const = 0;
 
   NodeId node_id;
+  Location locus;
 
 public:
   virtual ~TraitItem () {}
@@ -1381,6 +1385,7 @@ public:
   virtual bool is_marked_for_strip () const = 0;
 
   NodeId get_node_id () const { return node_id; }
+  Location get_locus () const { return locus; }
 };
 
 /* Abstract base class for items used within an inherent impl block (the impl
@@ -1523,6 +1528,9 @@ public:
   // TODO: this mutable getter seems kinda dodgy
   DelimTokenTree &get_delim_tok_tree () { return token_tree; }
   const DelimTokenTree &get_delim_tok_tree () const { return token_tree; }
+
+  // Set the delim token tree of a macro invocation
+  void set_delim_tok_tree (DelimTokenTree tree) { token_tree = tree; }
 
   // TODO: this mutable getter seems kinda dodgy
   SimplePath &get_path () { return path; }
@@ -1855,138 +1863,6 @@ public:
 
     gcc_unreachable ();
     return "";
-  }
-};
-
-/* Basically, a "fragment" that can be incorporated into the AST, created as
- * a result of macro expansion. Really annoying to work with due to the fact
- * that macros can really expand to anything. As such, horrible representation
- * at the moment. */
-class ASTFragment
-{
-private:
-  /* basic idea: essentially, a vector of tagged unions of different AST node
-   * types. Now, this could actually be stored without a tagged union if the
-   * different AST node types had a unified parent, but that would create
-   * issues with the diamond problem or significant performance penalties. So
-   * a tagged union had to be used instead. A vector is used to represent the
-   * ability for a macro to expand to two statements, for instance. */
-
-  std::vector<SingleASTNode> nodes;
-  bool fragment_is_error;
-
-  /**
-   * We need to make a special case for Expression and Type fragments as only
-   * one Node will be extracted from the `nodes` vector
-   */
-
-  bool is_single_fragment () const { return nodes.size () == 1; }
-
-  bool is_single_fragment_of_kind (SingleASTNode::NodeType expected) const
-  {
-    return is_single_fragment () && nodes[0].get_kind () == expected;
-  }
-
-  void assert_single_fragment (SingleASTNode::NodeType expected) const
-  {
-    static const std::map<SingleASTNode::NodeType, const char *> str_map = {
-      {SingleASTNode::NodeType::IMPL, "impl"},
-      {SingleASTNode::NodeType::ITEM, "item"},
-      {SingleASTNode::NodeType::TYPE, "type"},
-      {SingleASTNode::NodeType::EXPRESSION, "expr"},
-      {SingleASTNode::NodeType::STMT, "stmt"},
-      {SingleASTNode::NodeType::EXTERN, "extern"},
-      {SingleASTNode::NodeType::TRAIT, "trait"},
-      {SingleASTNode::NodeType::TRAIT_IMPL, "trait impl"},
-    };
-
-    auto actual = nodes[0].get_kind ();
-    auto fail = false;
-
-    if (!is_single_fragment ())
-      {
-	rust_error_at (Location (), "fragment is not single");
-	fail = true;
-      }
-
-    if (actual != expected)
-      {
-	rust_error_at (
-	  Location (),
-	  "invalid fragment operation: expected %qs node, got %qs node",
-	  str_map.find (expected)->second,
-	  str_map.find (nodes[0].get_kind ())->second);
-	fail = true;
-      }
-
-    rust_assert (!fail);
-  }
-
-public:
-  ASTFragment (std::vector<SingleASTNode> nodes, bool fragment_is_error = false)
-    : nodes (std::move (nodes)), fragment_is_error (fragment_is_error)
-  {
-    if (fragment_is_error)
-      rust_assert (nodes.empty ());
-  }
-
-  ASTFragment (ASTFragment const &other)
-    : fragment_is_error (other.fragment_is_error)
-  {
-    nodes.clear ();
-    nodes.reserve (other.nodes.size ());
-    for (auto &n : other.nodes)
-      {
-	nodes.push_back (n);
-      }
-  }
-
-  ASTFragment &operator= (ASTFragment const &other)
-  {
-    fragment_is_error = other.fragment_is_error;
-    nodes.clear ();
-    nodes.reserve (other.nodes.size ());
-    for (auto &n : other.nodes)
-      {
-	nodes.push_back (n);
-      }
-
-    return *this;
-  }
-
-  static ASTFragment create_error () { return ASTFragment ({}, true); }
-
-  std::vector<SingleASTNode> &get_nodes () { return nodes; }
-  bool is_error () const { return fragment_is_error; }
-
-  bool should_expand () const { return !is_error (); }
-
-  bool is_expression_fragment () const
-  {
-    return is_single_fragment_of_kind (SingleASTNode::NodeType::EXPRESSION);
-  }
-
-  bool is_type_fragment () const
-  {
-    return is_single_fragment_of_kind (SingleASTNode::NodeType::TYPE);
-  }
-
-  std::unique_ptr<Expr> take_expression_fragment ()
-  {
-    assert_single_fragment (SingleASTNode::NodeType::EXPRESSION);
-    return nodes[0].take_expr ();
-  }
-
-  std::unique_ptr<Type> take_type_fragment ()
-  {
-    assert_single_fragment (SingleASTNode::NodeType::TYPE);
-    return nodes[0].take_type ();
-  }
-
-  void accept_vis (ASTVisitor &vis)
-  {
-    for (auto &node : nodes)
-      node.accept_vis (vis);
   }
 };
 

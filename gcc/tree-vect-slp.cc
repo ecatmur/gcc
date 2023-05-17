@@ -423,10 +423,13 @@ can_duplicate_and_interleave_p (vec_info *vinfo, unsigned int count,
 	    (GET_MODE_BITSIZE (int_mode), 1);
 	  tree vector_type
 	    = get_vectype_for_scalar_type (vinfo, int_type, count);
+	  poly_int64 half_nelts;
 	  if (vector_type
 	      && VECTOR_MODE_P (TYPE_MODE (vector_type))
 	      && known_eq (GET_MODE_SIZE (TYPE_MODE (vector_type)),
-			   GET_MODE_SIZE (base_vector_mode)))
+			   GET_MODE_SIZE (base_vector_mode))
+	      && multiple_p (GET_MODE_NUNITS (TYPE_MODE (vector_type)),
+			     2, &half_nelts))
 	    {
 	      /* Try fusing consecutive sequences of COUNT / NVECTORS elements
 		 together into elements of type INT_TYPE and using the result
@@ -434,7 +437,7 @@ can_duplicate_and_interleave_p (vec_info *vinfo, unsigned int count,
 	      poly_uint64 nelts = GET_MODE_NUNITS (TYPE_MODE (vector_type));
 	      vec_perm_builder sel1 (nelts, 2, 3);
 	      vec_perm_builder sel2 (nelts, 2, 3);
-	      poly_int64 half_nelts = exact_div (nelts, 2);
+
 	      for (unsigned int i = 0; i < 3; ++i)
 		{
 		  sel1.quick_push (i);
@@ -5951,8 +5954,6 @@ vect_slp_analyze_node_operations_1 (vec_info *vinfo, slp_tree node,
       return true;
     }
 
-  gcc_assert (STMT_SLP_TYPE (stmt_info) != loop_vect);
-
   bool dummy;
   return vect_analyze_stmt (vinfo, stmt_info, &dummy,
 			    node, node_instance, cost_vec);
@@ -7673,15 +7674,28 @@ vect_slp_function (function *fun)
 	{
 	  r |= vect_slp_bbs (bbs, NULL);
 	  bbs.truncate (0);
-	  bbs.quick_push (bb);
 	}
-      else
-	bbs.safe_push (bb);
+
+      /* We need to be able to insert at the head of the region which
+	 we cannot for region starting with a returns-twice call.  */
+      if (bbs.is_empty ())
+	if (gcall *first = safe_dyn_cast <gcall *> (first_stmt (bb)))
+	  if (gimple_call_flags (first) & ECF_RETURNS_TWICE)
+	    {
+	      if (dump_enabled_p ())
+		dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
+				 "skipping bb%d as start of region as it "
+				 "starts with returns-twice call\n",
+				 bb->index);
+	      continue;
+	    }
+
+      bbs.safe_push (bb);
 
       /* When we have a stmt ending this block and defining a
 	 value we have to insert on edges when inserting after it for
 	 a vector containing its definition.  Avoid this for now.  */
-      if (gimple *last = last_stmt (bb))
+      if (gimple *last = *gsi_last_bb (bb))
 	if (gimple_get_lhs (last)
 	    && is_ctrl_altering_stmt (last))
 	  {

@@ -150,6 +150,50 @@ static tree fold_convert_const (enum tree_code, tree, tree);
 static tree fold_view_convert_expr (tree, tree);
 static tree fold_negate_expr (location_t, tree);
 
+/* This is a helper function to detect min/max for some operands of COND_EXPR.
+   The form is "(EXP0 CMP EXP1) ? EXP2 : EXP3". */
+tree_code
+minmax_from_comparison (tree_code cmp, tree exp0, tree exp1, tree exp2, tree exp3)
+{
+  enum tree_code code = ERROR_MARK;
+
+  if (HONOR_NANS (exp0) || HONOR_SIGNED_ZEROS (exp0))
+    return ERROR_MARK;
+
+  if (!operand_equal_p (exp0, exp2))
+    return ERROR_MARK;
+
+  if (TREE_CODE (exp3) == INTEGER_CST && TREE_CODE (exp1) == INTEGER_CST)
+    {
+      if (wi::to_widest (exp1) == (wi::to_widest (exp3) - 1))
+	{
+	  /* X <= Y - 1 equals to X < Y.  */
+	  if (cmp == LE_EXPR)
+	    code = LT_EXPR;
+	  /* X > Y - 1 equals to X >= Y.  */
+	  if (cmp == GT_EXPR)
+	    code = GE_EXPR;
+	}
+      if (wi::to_widest (exp1) == (wi::to_widest (exp3) + 1))
+	{
+	  /* X < Y + 1 equals to X <= Y.  */
+	  if (cmp == LT_EXPR)
+	    code = LE_EXPR;
+	  /* X >= Y + 1 equals to X > Y.  */
+	  if (cmp == GE_EXPR)
+	  code = GT_EXPR;
+	}
+    }
+  if (code != ERROR_MARK
+      || operand_equal_p (exp1, exp3))
+    {
+      if (cmp == LT_EXPR || cmp == LE_EXPR)
+	code = MIN_EXPR;
+      if (cmp == GT_EXPR || cmp == GE_EXPR)
+	code = MAX_EXPR;
+    }
+  return code;
+}
 
 /* Return EXPR_LOCATION of T if it is not UNKNOWN_LOCATION.
    Otherwise, return LOC.  */
@@ -2646,6 +2690,7 @@ maybe_lvalue_p (const_tree x)
   case LABEL_DECL:
   case FUNCTION_DECL:
   case SSA_NAME:
+  case COMPOUND_LITERAL_EXPR:
 
   case COMPONENT_REF:
   case MEM_REF:
@@ -7093,6 +7138,7 @@ extract_muldiv_1 (tree t, tree c, enum tree_code code, tree wide_type,
 	 If we have an unsigned type, we cannot do this since it will change
 	 the result if the original computation overflowed.  */
       if (TYPE_OVERFLOW_UNDEFINED (ctype)
+	  && !TYPE_OVERFLOW_SANITIZED (ctype)
 	  && ((code == MULT_EXPR && tcode == EXACT_DIV_EXPR)
 	      || (tcode == MULT_EXPR
 		  && code != TRUNC_MOD_EXPR && code != CEIL_MOD_EXPR
@@ -7102,8 +7148,7 @@ extract_muldiv_1 (tree t, tree c, enum tree_code code, tree wide_type,
 	  if (wi::multiple_of_p (wi::to_wide (op1), wi::to_wide (c),
 				 TYPE_SIGN (type)))
 	    {
-	      if (TYPE_OVERFLOW_UNDEFINED (ctype))
-		*strict_overflow_p = true;
+	      *strict_overflow_p = true;
 	      return fold_build2 (tcode, ctype, fold_convert (ctype, op0),
 				  fold_convert (ctype,
 						const_binop (TRUNC_DIV_EXPR,
@@ -7112,8 +7157,7 @@ extract_muldiv_1 (tree t, tree c, enum tree_code code, tree wide_type,
 	  else if (wi::multiple_of_p (wi::to_wide (c), wi::to_wide (op1),
 				      TYPE_SIGN (type)))
 	    {
-	      if (TYPE_OVERFLOW_UNDEFINED (ctype))
-		*strict_overflow_p = true;
+	      *strict_overflow_p = true;
 	      return fold_build2 (code, ctype, fold_convert (ctype, op0),
 				  fold_convert (ctype,
 						const_binop (TRUNC_DIV_EXPR,
@@ -8873,11 +8917,13 @@ native_interpret_expr (tree type, const unsigned char *ptr, int len)
 	     valid values that GCC can't really represent accurately.
 	     See PR95450.  Even for other modes, e.g. x86 XFmode can have some
 	     bit combinationations which GCC doesn't preserve.  */
-	  unsigned char buf[24];
+	  unsigned char buf[24 * 2];
 	  scalar_float_mode mode = SCALAR_FLOAT_TYPE_MODE (type);
 	  int total_bytes = GET_MODE_SIZE (mode);
+	  memcpy (buf + 24, ptr, total_bytes);
+	  clear_type_padding_in_mask (type, buf + 24);
 	  if (native_encode_expr (ret, buf, total_bytes, 0) != total_bytes
-	      || memcmp (ptr, buf, total_bytes) != 0)
+	      || memcmp (buf + 24, buf, total_bytes) != 0)
 	    return NULL_TREE;
 	  return ret;
 	}
@@ -10836,8 +10882,7 @@ expr_not_equal_to (tree t, const wide_int &w)
       else
 	get_global_range_query ()->range_of_expr (vr, t);
 
-      if (!vr.undefined_p ()
-	  && !vr.contains_p (wide_int_to_tree (TREE_TYPE (t), w)))
+      if (!vr.undefined_p () && !vr.contains_p (w))
 	return true;
       /* If T has some known zero bits and W has any of those bits set,
 	 then T is known not to be equal to W.  */
@@ -11318,7 +11363,8 @@ fold_binary_loc (location_t loc, enum tree_code code, tree type,
 	 And, we need to make sure type is not saturating.  */
 
       if ((! FLOAT_TYPE_P (type) || flag_associative_math)
-	  && !TYPE_SATURATING (type))
+	  && !TYPE_SATURATING (type)
+	  && !TYPE_OVERFLOW_SANITIZED (type))
 	{
 	  tree var0, minus_var0, con0, minus_con0, lit0, minus_lit0;
 	  tree var1, minus_var1, con1, minus_con1, lit1, minus_lit1;

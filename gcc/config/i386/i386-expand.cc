@@ -197,9 +197,20 @@ split_double_concat (machine_mode mode, rtx dst, rtx lo, rtx hi)
     {
       /* In this case, code below would first emit_move_insn (dlo, lo)
 	 and then emit_move_insn (dhi, hi).  But the former would
-	 invalidate hi's address.  Load into dhi first.  */
-      emit_move_insn (dhi, hi);
-      hi = dhi;
+	 invalidate hi's address.  */
+      if (rtx_equal_p (dhi, lo))
+	{
+	  /* We can't load into dhi first, so load into dlo
+	     first and we'll swap.  */
+	  emit_move_insn (dlo, hi);
+	  hi = dlo;
+	}
+      else
+	{
+	  /* Load into dhi first.  */
+	  emit_move_insn (dhi, hi);
+	  hi = dhi;
+	}
     }
   if (!rtx_equal_p (dlo, hi))
     {
@@ -327,7 +338,7 @@ ix86_convert_const_wide_int_to_broadcast (machine_mode mode, rtx op)
   machine_mode vector_mode;
   if (!mode_for_vector (broadcast_mode, nunits).exists (&vector_mode))
     gcc_unreachable ();
-  rtx target = ix86_gen_scratch_sse_rtx (vector_mode);
+  rtx target = gen_reg_rtx (vector_mode);
   bool ok = ix86_expand_vector_init_duplicate (false, vector_mode,
 					       target,
 					       GEN_INT (val_broadcast));
@@ -675,7 +686,7 @@ ix86_expand_vector_move (machine_mode mode, rtx operands[])
       if (!register_operand (op0, mode)
 	  && !register_operand (op1, mode))
 	{
-	  rtx scratch = ix86_gen_scratch_sse_rtx (mode);
+	  rtx scratch = gen_reg_rtx (mode);
 	  emit_move_insn (scratch, op1);
 	  op1 = scratch;
 	}
@@ -717,7 +728,7 @@ ix86_expand_vector_move (machine_mode mode, rtx operands[])
       && !register_operand (op0, mode)
       && !register_operand (op1, mode))
     {
-      rtx tmp = ix86_gen_scratch_sse_rtx (GET_MODE (op0));
+      rtx tmp = gen_reg_rtx (GET_MODE (op0));
       emit_move_insn (tmp, op1);
       emit_move_insn (op0, tmp);
       return;
@@ -2022,7 +2033,7 @@ ix86_expand_vector_convert_uns_vsivsf (rtx target, rtx val)
 }
 
 /* Adjust a V*SFmode/V*DFmode value VAL so that *sfix_trunc* resp. fix_trunc*
-   pattern can be used on it instead of *ufix_trunc* resp. fixuns_trunc*.
+   pattern can be used on it instead of fixuns_trunc*.
    This is done by doing just signed conversion if < 0x1p31, and otherwise by
    subtracting 0x1p31 first and xoring in 0x80000000 from *XORP afterwards.  */
 
@@ -7091,6 +7102,37 @@ ix86_expand_v1ti_ashiftrt (rtx operands[])
 
       emit_move_insn (operands[0], gen_lowpart (V1TImode, tmp14));
     }
+}
+
+/* Replace all occurrences of REG FROM with REG TO in X, including
+   occurrences with different modes.  */
+
+rtx
+ix86_replace_reg_with_reg (rtx x, rtx from, rtx to)
+{
+  gcc_checking_assert (REG_P (from)
+		       && REG_P (to)
+		       && GET_MODE (from) == GET_MODE (to));
+  if (!reg_overlap_mentioned_p (from, x))
+    return x;
+  rtx ret = copy_rtx (x);
+  subrtx_ptr_iterator::array_type array;
+  FOR_EACH_SUBRTX_PTR (iter, array, &ret, NONCONST)
+    {
+      rtx *loc = *iter;
+      x = *loc;
+      if (REG_P (x) && REGNO (x) == REGNO (from))
+	{
+	  if (x == from)
+	    *loc = to;
+	  else
+	    {
+	      gcc_checking_assert (REG_NREGS (x) == 1);
+	      *loc = gen_rtx_REG (GET_MODE (x), REGNO (to));
+	    }
+	}
+    }
+  return ret;
 }
 
 /* Return mode for the memcpy/memset loop counter.  Prefer SImode over
@@ -12546,6 +12588,7 @@ ix86_check_builtin_isa_match (unsigned int fcode,
   HOST_WIDE_INT isa2 = ix86_isa_flags2;
   HOST_WIDE_INT bisa = ix86_builtins_isa[fcode].isa;
   HOST_WIDE_INT bisa2 = ix86_builtins_isa[fcode].isa2;
+  HOST_WIDE_INT tmp_isa = isa, tmp_isa2 = isa2;
   /* The general case is we require all the ISAs specified in bisa{,2}
      to be enabled.
      The exceptions are:
@@ -12554,60 +12597,36 @@ ix86_check_builtin_isa_match (unsigned int fcode,
      OPTION_MASK_ISA_FMA | OPTION_MASK_ISA_FMA4
      (OPTION_MASK_ISA_AVX512VNNI | OPTION_MASK_ISA_AVX512VL) or
        OPTION_MASK_ISA2_AVXVNNI
-     (OPTION_MASK_ISA_AVX512IFMA | OPTION_MASK_ISA_AVX512IFMA) or
+     (OPTION_MASK_ISA_AVX512IFMA | OPTION_MASK_ISA_AVX512VL) or
        OPTION_MASK_ISA2_AVXIFMA
-     (OPTION_MASK_ISA_AVXNECONVERT | OPTION_MASK_ISA2_AVX512BF16) or
+     (OPTION_MASK_ISA_AVX512VL | OPTION_MASK_ISA2_AVX512BF16) or
        OPTION_MASK_ISA2_AVXNECONVERT
      where for each such pair it is sufficient if either of the ISAs is
      enabled, plus if it is ored with other options also those others.
      OPTION_MASK_ISA_MMX in bisa is satisfied also if TARGET_MMX_WITH_SSE.  */
-  if (((bisa & (OPTION_MASK_ISA_SSE | OPTION_MASK_ISA_3DNOW_A))
-       == (OPTION_MASK_ISA_SSE | OPTION_MASK_ISA_3DNOW_A))
-      && (isa & (OPTION_MASK_ISA_SSE | OPTION_MASK_ISA_3DNOW_A)) != 0)
-    isa |= (OPTION_MASK_ISA_SSE | OPTION_MASK_ISA_3DNOW_A);
 
-  if (((bisa & (OPTION_MASK_ISA_SSE4_2 | OPTION_MASK_ISA_CRC32))
-       == (OPTION_MASK_ISA_SSE4_2 | OPTION_MASK_ISA_CRC32))
-      && (isa & (OPTION_MASK_ISA_SSE4_2 | OPTION_MASK_ISA_CRC32)) != 0)
-    isa |= (OPTION_MASK_ISA_SSE4_2 | OPTION_MASK_ISA_CRC32);
-
-  if (((bisa & (OPTION_MASK_ISA_FMA | OPTION_MASK_ISA_FMA4))
-       == (OPTION_MASK_ISA_FMA | OPTION_MASK_ISA_FMA4))
-      && (isa & (OPTION_MASK_ISA_FMA | OPTION_MASK_ISA_FMA4)) != 0)
-    isa |= (OPTION_MASK_ISA_FMA | OPTION_MASK_ISA_FMA4);
-
-  if ((((bisa & (OPTION_MASK_ISA_AVX512VNNI | OPTION_MASK_ISA_AVX512VL))
-	== (OPTION_MASK_ISA_AVX512VNNI | OPTION_MASK_ISA_AVX512VL))
-       || (bisa2 & OPTION_MASK_ISA2_AVXVNNI) != 0)
-      && (((isa & (OPTION_MASK_ISA_AVX512VNNI | OPTION_MASK_ISA_AVX512VL))
-	   == (OPTION_MASK_ISA_AVX512VNNI | OPTION_MASK_ISA_AVX512VL))
-	  || (isa2 & OPTION_MASK_ISA2_AVXVNNI) != 0))
-    {
-      isa |= OPTION_MASK_ISA_AVX512VNNI | OPTION_MASK_ISA_AVX512VL;
-      isa2 |= OPTION_MASK_ISA2_AVXVNNI;
+#define SHARE_BUILTIN(A1, A2, B1, B2) \
+  if ((((bisa & (A1)) == (A1) && (bisa2 & (A2)) == (A2)) \
+       && ((bisa & (B1)) == (B1) && (bisa2 & (B2)) == (B2))) \
+      && (((isa & (A1)) == (A1) && (isa2 & (A2)) == (A2)) \
+	  || ((isa & (B1)) == (B1) && (isa2 & (B2)) == (B2)))) \
+    { \
+      tmp_isa |= (A1) | (B1); \
+      tmp_isa2 |= (A2) | (B2); \
     }
 
-  if ((((bisa & (OPTION_MASK_ISA_AVX512IFMA | OPTION_MASK_ISA_AVX512VL))
-	== (OPTION_MASK_ISA_AVX512IFMA | OPTION_MASK_ISA_AVX512VL))
-       || (bisa2 & OPTION_MASK_ISA2_AVXIFMA) != 0)
-      && (((isa & (OPTION_MASK_ISA_AVX512IFMA | OPTION_MASK_ISA_AVX512VL))
-	   == (OPTION_MASK_ISA_AVX512IFMA | OPTION_MASK_ISA_AVX512VL))
-	  || (isa2 & OPTION_MASK_ISA2_AVXIFMA) != 0))
-    {
-      isa |= OPTION_MASK_ISA_AVX512IFMA | OPTION_MASK_ISA_AVX512VL;
-      isa2 |= OPTION_MASK_ISA2_AVXIFMA;
-    }
-
-  if ((((bisa & OPTION_MASK_ISA_AVX512VL) != 0
-	 && (bisa2 & OPTION_MASK_ISA2_AVX512BF16) != 0)
-	&& (bisa2 & OPTION_MASK_ISA2_AVXNECONVERT) != 0)
-       && (((isa & OPTION_MASK_ISA_AVX512VL) != 0
-	    && (isa2 & OPTION_MASK_ISA2_AVX512BF16) != 0)
-	   || (isa2 & OPTION_MASK_ISA2_AVXNECONVERT) != 0))
-    {
-      isa |= OPTION_MASK_ISA_AVX512VL;
-      isa2 |= OPTION_MASK_ISA2_AVXNECONVERT | OPTION_MASK_ISA2_AVX512BF16;
-    }
+  SHARE_BUILTIN (OPTION_MASK_ISA_SSE, 0, OPTION_MASK_ISA_3DNOW_A, 0);
+  SHARE_BUILTIN (OPTION_MASK_ISA_SSE4_2, 0, OPTION_MASK_ISA_CRC32, 0);
+  SHARE_BUILTIN (OPTION_MASK_ISA_FMA, 0, OPTION_MASK_ISA_FMA4, 0);
+  SHARE_BUILTIN (OPTION_MASK_ISA_AVX512VNNI | OPTION_MASK_ISA_AVX512VL, 0, 0,
+		 OPTION_MASK_ISA2_AVXVNNI);
+  SHARE_BUILTIN (OPTION_MASK_ISA_AVX512IFMA | OPTION_MASK_ISA_AVX512VL, 0, 0,
+		 OPTION_MASK_ISA2_AVXIFMA);
+  SHARE_BUILTIN (OPTION_MASK_ISA_AVX512VL, OPTION_MASK_ISA2_AVX512BF16, 0,
+		 OPTION_MASK_ISA2_AVXNECONVERT);
+  SHARE_BUILTIN (OPTION_MASK_ISA_AES, 0, 0, OPTION_MASK_ISA2_VAES);
+  isa = tmp_isa;
+  isa2 = tmp_isa2;
 
   if ((bisa & OPTION_MASK_ISA_MMX) && !TARGET_MMX && TARGET_MMX_WITH_SSE
       /* __builtin_ia32_maskmovq requires MMX registers.  */
@@ -18918,11 +18937,9 @@ expand_vec_perm_movs (struct expand_vec_perm_d *d)
   if (d->one_operand_p)
     return false;
 
-  if (!(TARGET_SSE && vmode == V4SFmode)
-      && !(TARGET_SSE && vmode == V4SImode)
-      && !(TARGET_MMX_WITH_SSE && vmode == V2SFmode)
-      && !(TARGET_SSE2 && vmode == V2DFmode)
-      && !(TARGET_SSE2 && vmode == V2DImode))
+  if (!(TARGET_SSE && (vmode == V4SFmode || vmode == V4SImode))
+      && !(TARGET_MMX_WITH_SSE && (vmode == V2SFmode || vmode == V2SImode))
+      && !(TARGET_SSE2 && (vmode == V2DFmode || vmode == V2DImode)))
     return false;
 
   /* Only the first element is changed.  */
@@ -18941,6 +18958,78 @@ expand_vec_perm_movs (struct expand_vec_perm_d *d)
     x = gen_rtx_VEC_MERGE (vmode, d->op0, d->op1, GEN_INT (1));
 
   emit_insn (gen_rtx_SET (d->target, x));
+
+  return true;
+}
+
+/* A subroutine of ix86_expand_vec_perm_const_1.  Try to implement D
+   using insertps.  */
+static bool
+expand_vec_perm_insertps (struct expand_vec_perm_d *d)
+{
+  machine_mode vmode = d->vmode;
+  unsigned i, cnt_s, nelt = d->nelt;
+  int cnt_d = -1;
+  rtx src, dst;
+
+  if (d->one_operand_p)
+    return false;
+
+  if (!(TARGET_SSE4_1
+	&& (vmode == V4SFmode || vmode == V4SImode
+	    || (TARGET_MMX_WITH_SSE
+		&& (vmode == V2SFmode || vmode == V2SImode)))))
+    return false;
+
+  for (i = 0; i < nelt; ++i)
+    {
+      if (d->perm[i] == i)
+	continue;
+      if (cnt_d != -1)
+	{
+	  cnt_d = -1;
+	  break;
+	}
+      cnt_d = i;
+    }
+
+  if (cnt_d == -1)
+    {
+      for (i = 0; i < nelt; ++i)
+	{
+	  if (d->perm[i] == i + nelt)
+	    continue;
+	  if (cnt_d != -1)
+	    return false;
+	  cnt_d = i;
+	}
+
+      if (cnt_d == -1)
+	return false;
+    }
+
+  if (d->testing_p)
+    return true;
+
+  gcc_assert (cnt_d != -1);
+
+  cnt_s = d->perm[cnt_d];
+  if (cnt_s < nelt)
+    {
+      src = d->op0;
+      dst = d->op1;
+    }
+  else
+    {
+      cnt_s -= nelt;
+      src = d->op1;
+      dst = d->op0;
+     }
+  gcc_assert (cnt_s < nelt);
+
+  rtx x = gen_sse4_1_insertps (vmode, d->target, dst, src,
+			       GEN_INT (cnt_s << 6 | cnt_d << 4));
+  emit_insn (x);
 
   return true;
 }
@@ -18967,9 +19056,10 @@ expand_vec_perm_blend (struct expand_vec_perm_d *d)
     ;
   else if (TARGET_AVX && (vmode == V4DFmode || vmode == V8SFmode))
     ;
-  else if (TARGET_SSE4_1 && (GET_MODE_SIZE (vmode) == 16
-			     || GET_MODE_SIZE (vmode) == 8
-			     || GET_MODE_SIZE (vmode) == 4))
+  else if (TARGET_SSE4_1
+	   && (GET_MODE_SIZE (vmode) == 16
+	       || (TARGET_MMX_WITH_SSE && GET_MODE_SIZE (vmode) == 8)
+	       || GET_MODE_SIZE (vmode) == 4))
     ;
   else
     return false;
@@ -19002,6 +19092,8 @@ expand_vec_perm_blend (struct expand_vec_perm_d *d)
     case E_V8SFmode:
     case E_V2DFmode:
     case E_V4SFmode:
+    case E_V2SFmode:
+    case E_V2HImode:
     case E_V4HImode:
     case E_V8HImode:
     case E_V8SImode:
@@ -19026,10 +19118,20 @@ expand_vec_perm_blend (struct expand_vec_perm_d *d)
       goto do_subreg;
 
     case E_V4SImode:
-      for (i = 0; i < 4; ++i)
-	mask |= (d->perm[i] >= 4 ? 3 : 0) << (i * 2);
-      vmode = V8HImode;
-      goto do_subreg;
+      if (TARGET_AVX2)
+	{
+	  /* Use vpblendd instead of vpblendw.  */
+	  for (i = 0; i < nelt; ++i)
+	    mask |= ((unsigned HOST_WIDE_INT) (d->perm[i] >= nelt)) << i;
+	  break;
+	}
+      else
+	{
+	  for (i = 0; i < 4; ++i)
+	    mask |= (d->perm[i] >= 4 ? 3 : 0) << (i * 2);
+	  vmode = V8HImode;
+	  goto do_subreg;
+	}
 
     case E_V16QImode:
       /* See if bytes move in pairs so we can use pblendw with
@@ -19857,11 +19959,19 @@ expand_vec_perm_1 (struct expand_vec_perm_d *d)
 	}
     }
 
+  /* Try the SSE4.1 blend variable merge instructions.  */
+  if (expand_vec_perm_blend (d))
+    return true;
+
   /* Try movss/movsd instructions.  */
   if (expand_vec_perm_movs (d))
     return true;
 
-  /* Finally, try the fully general two operand permute.  */
+  /* Try the SSE4.1 insertps instruction.  */
+  if (expand_vec_perm_insertps (d))
+    return true;
+
+  /* Try the fully general two operand permute.  */
   if (expand_vselect_vconcat (d->target, d->op0, d->op1, d->perm, nelt,
 			      d->testing_p))
     return true;
@@ -19883,10 +19993,6 @@ expand_vec_perm_1 (struct expand_vec_perm_d *d)
 				  d->testing_p))
 	return true;
     }
-
-  /* Try the SSE4.1 blend variable merge instructions.  */
-  if (expand_vec_perm_blend (d))
-    return true;
 
   /* Try one of the AVX vpermil variable permutations.  */
   if (expand_vec_perm_vpermil (d))
@@ -20245,9 +20351,10 @@ expand_vec_perm_pblendv (struct expand_vec_perm_d *d)
     ;
   else if (TARGET_AVX && (vmode == V4DFmode || vmode == V8SFmode))
     ;
-  else if (TARGET_SSE4_1 && (GET_MODE_SIZE (vmode) == 4
-			     || GET_MODE_SIZE (vmode) == 8
-			     || GET_MODE_SIZE (vmode) == 16))
+  else if (TARGET_SSE4_1
+	   && (GET_MODE_SIZE (vmode) == 16
+	       || (TARGET_MMX_WITH_SSE && GET_MODE_SIZE (vmode) == 8)
+	       || GET_MODE_SIZE (vmode) == 4))
     ;
   else
     return false;
@@ -21111,9 +21218,10 @@ expand_vec_perm_2perm_pblendv (struct expand_vec_perm_d *d, bool two_insn)
     ;
   else if (TARGET_AVX && (vmode == V4DFmode || vmode == V8SFmode))
     ;
-  else if (TARGET_SSE4_1 && (GET_MODE_SIZE (vmode) == 16
-			     || GET_MODE_SIZE (vmode) == 8
-			     || GET_MODE_SIZE (vmode) == 4))
+  else if (TARGET_SSE4_1
+	   && (GET_MODE_SIZE (vmode) == 16
+	       || (TARGET_MMX_WITH_SSE && GET_MODE_SIZE (vmode) == 8)
+	       || GET_MODE_SIZE (vmode) == 4))
     ;
   else
     return false;
@@ -23014,12 +23122,11 @@ ix86_expand_vecop_qihi2 (enum rtx_code code, rtx dest, rtx op1, rtx op2)
 {
   machine_mode himode, qimode = GET_MODE (dest);
   rtx hop1, hop2, hdest;
-  rtx (*gen_extend)(rtx, rtx);
   rtx (*gen_truncate)(rtx, rtx);
   bool uns_p = (code == ASHIFTRT) ? false : true;
 
-  /* There's no V64HImode multiplication instruction.  */
-  if (qimode == E_V64QImode)
+  /* There are no V64HImode instructions.  */
+  if (qimode == V64QImode)
     return false;
 
   /* vpmovwb only available under AVX512BW.  */
@@ -23028,26 +23135,24 @@ ix86_expand_vecop_qihi2 (enum rtx_code code, rtx dest, rtx op1, rtx op2)
   if ((qimode == V8QImode || qimode == V16QImode)
       && !TARGET_AVX512VL)
     return false;
-  /* Not generate zmm instruction when prefer 128/256 bit vector width.  */
-  if (qimode == V32QImode
-      && (TARGET_PREFER_AVX128 || TARGET_PREFER_AVX256))
+  /* Do not generate ymm/zmm instructions when
+     target prefers 128/256 bit vector width.  */
+  if ((qimode == V16QImode && TARGET_PREFER_AVX128)
+      || (qimode == V32QImode && TARGET_PREFER_AVX256))
     return false;
 
   switch (qimode)
     {
     case E_V8QImode:
       himode = V8HImode;
-      gen_extend = uns_p ? gen_zero_extendv8qiv8hi2 : gen_extendv8qiv8hi2;
       gen_truncate = gen_truncv8hiv8qi2;
       break;
     case E_V16QImode:
       himode = V16HImode;
-      gen_extend = uns_p ? gen_zero_extendv16qiv16hi2 : gen_extendv16qiv16hi2;
       gen_truncate = gen_truncv16hiv16qi2;
       break;
     case E_V32QImode:
       himode = V32HImode;
-      gen_extend = uns_p ? gen_zero_extendv32qiv32hi2 : gen_extendv32qiv32hi2;
       gen_truncate = gen_truncv32hiv32qi2;
       break;
     default:
@@ -23057,8 +23162,8 @@ ix86_expand_vecop_qihi2 (enum rtx_code code, rtx dest, rtx op1, rtx op2)
   hop1 = gen_reg_rtx (himode);
   hop2 = gen_reg_rtx (himode);
   hdest = gen_reg_rtx (himode);
-  emit_insn (gen_extend (hop1, op1));
-  emit_insn (gen_extend (hop2, op2));
+  emit_insn (gen_extend_insn (hop1, op1, himode, qimode, uns_p));
+  emit_insn (gen_extend_insn (hop2, op2, himode, qimode, uns_p));
   emit_insn (gen_rtx_SET (hdest, simplify_gen_binary (code, himode,
 						      hop1, hop2)));
   emit_insn (gen_truncate (dest, hdest));
@@ -23177,8 +23282,9 @@ ix86_expand_vecop_qihi (enum rtx_code code, rtx dest, rtx op1, rtx op2)
   rtx (*gen_ih) (rtx, rtx, rtx);
   rtx op1_l, op1_h, op2_l, op2_h, res_l, res_h;
   struct expand_vec_perm_d d;
-  bool ok, full_interleave;
-  bool uns_p = false;
+  bool full_interleave = true;
+  bool uns_p = true;
+  bool ok;
   int i;
 
   if (CONST_INT_P (op2)
@@ -23195,18 +23301,12 @@ ix86_expand_vecop_qihi (enum rtx_code code, rtx dest, rtx op1, rtx op2)
     {
     case E_V16QImode:
       himode = V8HImode;
-      gen_il = gen_vec_interleave_lowv16qi;
-      gen_ih = gen_vec_interleave_highv16qi;
       break;
     case E_V32QImode:
       himode = V16HImode;
-      gen_il = gen_avx2_interleave_lowv32qi;
-      gen_ih = gen_avx2_interleave_highv32qi;
       break;
     case E_V64QImode:
       himode = V32HImode;
-      gen_il = gen_avx512bw_interleave_lowv64qi;
-      gen_ih = gen_avx512bw_interleave_highv64qi;
       break;
     default:
       gcc_unreachable ();
@@ -23219,6 +23319,26 @@ ix86_expand_vecop_qihi (enum rtx_code code, rtx dest, rtx op1, rtx op2)
 	 each word.  We don't care what goes into the high byte of each word.
 	 Rather than trying to get zero in there, most convenient is to let
 	 it be a copy of the low byte.  */
+      switch (qimode)
+	{
+	case E_V16QImode:
+	  gen_il = gen_vec_interleave_lowv16qi;
+	  gen_ih = gen_vec_interleave_highv16qi;
+	  break;
+	case E_V32QImode:
+	  gen_il = gen_avx2_interleave_lowv32qi;
+	  gen_ih = gen_avx2_interleave_highv32qi;
+	  full_interleave = false;
+	  break;
+	case E_V64QImode:
+	  gen_il = gen_avx512bw_interleave_lowv64qi;
+	  gen_ih = gen_avx512bw_interleave_highv64qi;
+	  full_interleave = false;
+	  break;
+	default:
+	  gcc_unreachable ();
+	}
+
       op2_l = gen_reg_rtx (qimode);
       op2_h = gen_reg_rtx (qimode);
       emit_insn (gen_il (op2_l, op2, op2));
@@ -23228,14 +23348,13 @@ ix86_expand_vecop_qihi (enum rtx_code code, rtx dest, rtx op1, rtx op2)
       op1_h = gen_reg_rtx (qimode);
       emit_insn (gen_il (op1_l, op1, op1));
       emit_insn (gen_ih (op1_h, op1, op1));
-      full_interleave = qimode == V16QImode;
       break;
 
+    case ASHIFTRT:
+      uns_p = false;
+      /* FALLTHRU */
     case ASHIFT:
     case LSHIFTRT:
-      uns_p = true;
-      /* FALLTHRU */
-    case ASHIFTRT:
       op1_l = gen_reg_rtx (himode);
       op1_h = gen_reg_rtx (himode);
       ix86_expand_sse_unpack (op1_l, op1, uns_p, false);
@@ -23252,16 +23371,15 @@ ix86_expand_vecop_qihi (enum rtx_code code, rtx dest, rtx op1, rtx op2)
       else
 	op2_l = op2_h = op2;
 
-      full_interleave = true;
       break;
     default:
       gcc_unreachable ();
     }
 
-  /* Perform vashr/vlshr/vashl.  */
   if (code != MULT
       && GET_MODE_CLASS (GET_MODE (op2)) == MODE_VECTOR_INT)
     {
+      /* Expand vashr/vlshr/vashl.  */
       res_l = gen_reg_rtx (himode);
       res_h = gen_reg_rtx (himode);
       emit_insn (gen_rtx_SET (res_l,
@@ -23271,9 +23389,9 @@ ix86_expand_vecop_qihi (enum rtx_code code, rtx dest, rtx op1, rtx op2)
 			      simplify_gen_binary (code, himode,
 						   op1_h, op2_h)));
     }
-  /* Performance mult/ashr/lshr/ashl.  */
   else
     {
+      /* Expand mult/ashr/lshr/ashl.  */
       res_l = expand_simple_binop (himode, code, op1_l, op2_l, NULL_RTX,
 				   1, OPTAB_DIRECT);
       res_h = expand_simple_binop (himode, code, op1_h, op2_h, NULL_RTX,
@@ -23293,7 +23411,7 @@ ix86_expand_vecop_qihi (enum rtx_code code, rtx dest, rtx op1, rtx op2)
 
   if (full_interleave)
     {
-      /* For SSE2, we used an full interleave, so the desired
+      /* We used the full interleave, the desired
 	 results are in the even elements.  */
       for (i = 0; i < d.nelt; ++i)
 	d.perm[i] = i * 2;

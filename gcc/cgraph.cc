@@ -1548,7 +1548,8 @@ cgraph_edge::redirect_call_stmt_to_callee (cgraph_edge *e)
   else
     {
       if (flag_checking
-	  && !fndecl_built_in_p (e->callee->decl, BUILT_IN_UNREACHABLE))
+	  && !fndecl_built_in_p (e->callee->decl, BUILT_IN_UNREACHABLE,
+						  BUILT_IN_UNREACHABLE_TRAP))
 	ipa_verify_edge_has_no_modifications (e);
       new_stmt = e->call_stmt;
       gimple_call_set_fndecl (new_stmt, e->callee->decl);
@@ -1634,7 +1635,8 @@ cgraph_update_edges_for_call_stmt_node (cgraph_node *node,
 	{
 	  /* Keep calls marked as dead dead.  */
 	  if (new_stmt && is_gimple_call (new_stmt) && e->callee
-	      && fndecl_built_in_p (e->callee->decl, BUILT_IN_UNREACHABLE))
+	      && fndecl_built_in_p (e->callee->decl, BUILT_IN_UNREACHABLE,
+				    BUILT_IN_UNREACHABLE_TRAP))
 	    {
 	      cgraph_edge::set_call_stmt (node->get_edge (old_stmt),
 					  as_a <gcall *> (new_stmt));
@@ -2764,6 +2766,9 @@ set_const_flag_1 (cgraph_node *node, bool set_const, bool looping,
       if (!set_const || alias->get_availability () > AVAIL_INTERPOSABLE)
 	set_const_flag_1 (alias, set_const, looping, changed);
     }
+  for (struct cgraph_node *n = node->simd_clones; n != NULL;
+       n = n->simdclone->next_clone)
+    set_const_flag_1 (n, set_const, looping, changed);
   for (cgraph_edge *e = node->callers; e; e = e->next_caller)
     if (e->caller->thunk
 	&& (!set_const || e->caller->get_availability () > AVAIL_INTERPOSABLE))
@@ -2876,6 +2881,9 @@ cgraph_node::set_pure_flag (bool pure, bool looping)
 {
   struct set_pure_flag_info info = {pure, looping, false};
   call_for_symbol_thunks_and_aliases (set_pure_flag_1, &info, !pure, true);
+  for (struct cgraph_node *n = simd_clones; n != NULL;
+       n = n->simdclone->next_clone)
+    set_pure_flag_1 (n, &info);
   return info.changed;
 }
 
@@ -3250,9 +3258,8 @@ cgraph_edge::verify_corresponds_to_fndecl (tree decl)
   /* Optimizers can redirect unreachable calls or calls triggering undefined
      behavior to __builtin_unreachable or __builtin_unreachable trap.  */
 
-  if (fndecl_built_in_p (callee->decl, BUILT_IN_NORMAL)
-      && (DECL_FUNCTION_CODE (callee->decl) == BUILT_IN_UNREACHABLE
-	  || DECL_FUNCTION_CODE (callee->decl) == BUILT_IN_UNREACHABLE_TRAP))
+  if (fndecl_built_in_p (callee->decl, BUILT_IN_UNREACHABLE,
+				       BUILT_IN_UNREACHABLE_TRAP))
     return false;
 
   if (callee->former_clone_of != node->decl
@@ -3592,7 +3599,8 @@ cgraph_node::verify_node (void)
 	  /* Optimized out calls are redirected to __builtin_unreachable.  */
 	  && (e->count.nonzero_p ()
 	      || ! e->callee->decl
-	      || !fndecl_built_in_p (e->callee->decl, BUILT_IN_UNREACHABLE))
+	      || !fndecl_built_in_p (e->callee->decl, BUILT_IN_UNREACHABLE,
+				     BUILT_IN_UNREACHABLE_TRAP))
 	  && count
 	      == ENTRY_BLOCK_PTR_FOR_FN (DECL_STRUCT_FUNCTION (decl))->count
 	  && (!e->count.ipa_p ()

@@ -1330,7 +1330,7 @@ aliasing_component_refs_p (tree ref1,
   /* If we didn't find a common base, try the other way around.  */
   if (cmp_outer <= 0 
       || (end_struct_ref1
-	  && compare_type_sizes (TREE_TYPE (end_struct_ref1), type1) <= 0))
+	  && compare_type_sizes (TREE_TYPE (end_struct_ref1), type2) <= 0))
     {
       int res = aliasing_component_refs_walk (ref2, type2, base2,
 					      offset2, max_size2,
@@ -2726,9 +2726,21 @@ check_fnspec (gcall *call, ao_ref *ref, bool clobber)
 		      t = TREE_CHAIN (t);
 		    size = TYPE_SIZE_UNIT (TREE_TYPE (TREE_VALUE (t)));
 		  }
-		ao_ref_init_from_ptr_and_size (&dref,
-					       gimple_call_arg (call, i),
-					       size);
+		poly_int64 size_hwi;
+		if (size
+		    && poly_int_tree_p (size, &size_hwi)
+		    && coeffs_in_range_p (size_hwi, 0,
+					  HOST_WIDE_INT_MAX / BITS_PER_UNIT))
+		  {
+		    size_hwi = size_hwi * BITS_PER_UNIT;
+		    ao_ref_init_from_ptr_and_range (&dref,
+						    gimple_call_arg (call, i),
+						    true, 0, -1, size_hwi);
+		  }
+		else
+		  ao_ref_init_from_ptr_and_range (&dref,
+						  gimple_call_arg (call, i),
+						  false, 0, -1, -1);
 		if (refs_may_alias_p_1 (&dref, ref, false))
 		  return 1;
 	      }
@@ -3657,7 +3669,10 @@ maybe_skip_until (gimple *phi, tree &target, basic_block target_bb,
   basic_block bb = gimple_bb (phi);
 
   if (!*visited)
-    *visited = BITMAP_ALLOC (NULL);
+    {
+      *visited = BITMAP_ALLOC (NULL);
+      bitmap_tree_view (*visited);
+    }
 
   bitmap_set_bit (*visited, SSA_NAME_VERSION (PHI_RESULT (phi)));
 
@@ -3949,7 +3964,10 @@ walk_aliased_vdefs_1 (ao_ref *ref, tree vdef,
 	{
 	  unsigned i;
 	  if (!*visited)
-	    *visited = BITMAP_ALLOC (NULL);
+	    {
+	      *visited = BITMAP_ALLOC (NULL);
+	      bitmap_tree_view (*visited);
+	    }
 	  for (i = 0; i < gimple_phi_num_args (def_stmt); ++i)
 	    {
 	      int res = walk_aliased_vdefs_1 (ref,

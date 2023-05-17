@@ -111,9 +111,8 @@ private:
   virtual void visit (CallExpr &expr) override;
   virtual void visit (MethodCallExpr &expr) override;
   virtual void visit (FieldAccessExpr &expr) override;
-  virtual void visit (ClosureExprInner &expr) override;
+  virtual void visit (ClosureExpr &expr) override;
   virtual void visit (BlockExpr &expr) override;
-  virtual void visit (ClosureExprInnerTyped &expr) override;
   virtual void visit (ContinueExpr &expr) override;
   virtual void visit (BreakExpr &expr) override;
   virtual void visit (RangeFromToExpr &expr) override;
@@ -187,7 +186,6 @@ private:
   virtual void visit (TuplePatternItemsMultiple &tuple_items) override;
   virtual void visit (TuplePatternItemsRanged &tuple_items) override;
   virtual void visit (TuplePattern &pattern) override;
-  virtual void visit (GroupedPattern &pattern) override;
   virtual void visit (SlicePattern &pattern) override;
   virtual void visit (EmptyStmt &stmt) override;
   virtual void visit (LetStmt &stmt) override;

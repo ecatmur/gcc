@@ -2687,9 +2687,16 @@ satisfaction_cache
       *slot = entry;
     }
   else
-    /* We shouldn't get here, but if we do, let's just leave 'entry'
-       empty, effectively disabling the cache.  */
-    return;
+    {
+      /* We're evaluating this atom for the first time, and doing so noisily.
+	 This shouldn't happen outside of error recovery situations involving
+	 unstable satisfaction.  Let's just leave 'entry' empty, effectively
+	 disabling the cache, and remove the empty slot.  */
+      gcc_checking_assert (seen_error ());
+      /* Appease hash_table::check_complete_insertion.  */
+      *slot = ggc_alloc<sat_entry> ();
+      sat_cache->clear_slot (slot);
+    }
 }
 
 /* Returns the cached satisfaction result if we have one and we're not
@@ -2705,7 +2712,7 @@ satisfaction_cache::get ()
   if (entry->evaluating)
     {
       /* If we get here, it means satisfaction is self-recursive.  */
-      gcc_checking_assert (!entry->result);
+      gcc_checking_assert (!entry->result || seen_error ());
       if (info.noisy ())
 	error_at (EXPR_LOCATION (ATOMIC_CONSTR_EXPR (entry->atom)),
 		  "satisfaction of atomic constraint %qE depends on itself",
@@ -3068,8 +3075,7 @@ satisfy_atom (tree t, tree args, sat_info info)
     }
   else
     {
-      result = maybe_constant_value (result, NULL_TREE,
-				     /*manifestly_const_eval=*/true);
+      result = maybe_constant_value (result, NULL_TREE, mce_true);
       if (!TREE_CONSTANT (result))
 	result = error_mark_node;
     }
@@ -3676,6 +3682,16 @@ diagnose_trait_expr (tree expr, tree args)
 
   tree t1 = TRAIT_EXPR_TYPE1 (expr);
   tree t2 = TRAIT_EXPR_TYPE2 (expr);
+  if (t2 && TREE_CODE (t2) == TREE_VEC)
+    {
+      /* Convert the TREE_VEC of arguments into a TREE_LIST, since we can't
+	 directly print a TREE_VEC but we can a TREE_LIST via the E format
+	 specifier.  */
+      tree list = NULL_TREE;
+      for (tree t : tree_vec_range (t2))
+	list = tree_cons (NULL_TREE, t, list);
+      t2 = nreverse (list);
+    }
   switch (TRAIT_EXPR_KIND (expr))
     {
     case CPTK_HAS_NOTHROW_ASSIGN:
@@ -3797,6 +3813,9 @@ diagnose_trait_expr (tree expr, tree args)
     case CPTK_REF_CONVERTS_FROM_TEMPORARY:
       inform (loc, "  %qT is not a reference that binds to a temporary "
 	      "object of type %qT (copy-initialization)", t1, t2);
+      break;
+    case CPTK_IS_DEDUCIBLE:
+      inform (loc, "  %qD is not deducible from %qT", t1, t2);
       break;
 #define DEFTRAIT_TYPE(CODE, NAME, ARITY) \
     case CPTK_##CODE:

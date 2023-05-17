@@ -4130,11 +4130,11 @@ simplify_bound_dim (gfc_expr *array, gfc_expr *kind, int d, int upper,
 	  /* For {L,U}BOUND, the value depends on whether the array
 	     is empty.  We can nevertheless simplify if the declared bound
 	     has the same value as that of an empty array, in which case
-	     the result isn't dependent on the array emptyness.  */
+	     the result isn't dependent on the array emptiness.  */
 	  if (mpz_cmp_si (declared_bound->value.integer, empty_bound) == 0)
 	    mpz_set_si (result->value.integer, empty_bound);
 	  else if (!constant_lbound || !constant_ubound)
-	    /* Array emptyness can't be determined, we can't simplify.  */
+	    /* Array emptiness can't be determined, we can't simplify.  */
 	    goto returnNull;
 	  else if (mpz_cmp (l->value.integer, u->value.integer) > 0)
 	    mpz_set_si (result->value.integer, empty_bound);
@@ -6114,7 +6114,7 @@ gfc_simplify_nearest (gfc_expr *x, gfc_expr *s)
   kind = gfc_validate_kind (BT_REAL, x->ts.kind, 0);
   mpfr_set_emin ((mpfr_exp_t) gfc_real_kinds[kind].min_exponent -
 		mpfr_get_prec(result->value.real) + 1);
-  mpfr_set_emax ((mpfr_exp_t) gfc_real_kinds[kind].max_exponent - 1);
+  mpfr_set_emax ((mpfr_exp_t) gfc_real_kinds[kind].max_exponent);
   mpfr_check_range (result->value.real, 0, MPFR_RNDU);
 
   if (mpfr_sgn (s->value.real) > 0)
@@ -6866,6 +6866,7 @@ gfc_simplify_reshape (gfc_expr *source, gfc_expr *shape_exp,
 	  gfc_error ("The SHAPE array for the RESHAPE intrinsic at %L has a "
 		     "negative value %d for dimension %d",
 		     &shape_exp->where, shape[rank], rank+1);
+	  mpz_clear (index);
 	  return &gfc_bad_expr;
 	}
 
@@ -6889,6 +6890,7 @@ gfc_simplify_reshape (gfc_expr *source, gfc_expr *shape_exp,
 	{
 	  gfc_error ("Shapes of ORDER at %L and SHAPE at %L are different",
 		     &order_exp->where, &shape_exp->where);
+	  mpz_clear (index);
 	  return &gfc_bad_expr;
 	}
 
@@ -6902,6 +6904,7 @@ gfc_simplify_reshape (gfc_expr *source, gfc_expr *shape_exp,
 	{
 	  gfc_error ("Sizes of ORDER at %L and SHAPE at %L are different",
 		     &order_exp->where, &shape_exp->where);
+	  mpz_clear (index);
 	  return &gfc_bad_expr;
 	}
 
@@ -6918,6 +6921,7 @@ gfc_simplify_reshape (gfc_expr *source, gfc_expr *shape_exp,
 			 "in the range [1, ..., %d] for the RESHAPE intrinsic "
 			 "near %L", order[i], &order_exp->where, rank,
 			 &shape_exp->where);
+	      mpz_clear (index);
 	      return &gfc_bad_expr;
 	    }
 
@@ -6926,6 +6930,7 @@ gfc_simplify_reshape (gfc_expr *source, gfc_expr *shape_exp,
 	    {
 	      gfc_error ("ORDER at %L is not a permutation of the size of "
 			 "SHAPE at %L", &order_exp->where, &shape_exp->where);
+	      mpz_clear (index);
 	      return &gfc_bad_expr;
 	    }
 	  x[order[i]] = 1;
@@ -7364,7 +7369,7 @@ gfc_simplify_set_exponent (gfc_expr *x, gfc_expr *i)
 {
   gfc_expr *result;
   mpfr_t exp, absv, log2, pow2, frac;
-  unsigned long exp2;
+  long exp2;
 
   if (x->expr_type != EXPR_CONSTANT || i->expr_type != EXPR_CONSTANT)
     return NULL;
@@ -7396,19 +7401,19 @@ gfc_simplify_set_exponent (gfc_expr *x, gfc_expr *i)
   mpfr_abs (absv, x->value.real, GFC_RND_MODE);
   mpfr_log2 (log2, absv, GFC_RND_MODE);
 
-  mpfr_trunc (log2, log2);
+  mpfr_floor (log2, log2);
   mpfr_add_ui (exp, log2, 1, GFC_RND_MODE);
 
   /* Old exponent value, and fraction.  */
   mpfr_ui_pow (pow2, 2, exp, GFC_RND_MODE);
 
-  mpfr_div (frac, absv, pow2, GFC_RND_MODE);
+  mpfr_div (frac, x->value.real, pow2, GFC_RND_MODE);
 
   /* New exponent.  */
-  exp2 = (unsigned long) mpz_get_d (i->value.integer);
-  mpfr_mul_2exp (result->value.real, frac, exp2, GFC_RND_MODE);
+  exp2 = mpz_get_si (i->value.integer);
+  mpfr_mul_2si (result->value.real, frac, exp2, GFC_RND_MODE);
 
-  mpfr_clears (absv, log2, pow2, frac, NULL);
+  mpfr_clears (absv, log2, exp, pow2, frac, NULL);
 
   return range_check (result, "SET_EXPONENT");
 }

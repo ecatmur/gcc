@@ -466,6 +466,10 @@ free_expr0 (gfc_expr *e)
 	  mpc_clear (e->value.complex);
 	  break;
 
+	case BT_BOZ:
+	  free (e->boz.str);
+	  break;
+
 	default:
 	  break;
 	}
@@ -545,6 +549,7 @@ gfc_free_actual_arglist (gfc_actual_arglist *a1)
       a2 = a1->next;
       if (a1->expr)
 	gfc_free_expr (a1->expr);
+      free (a1->associated_dummy);
       free (a1);
       a1 = a2;
     }
@@ -564,6 +569,12 @@ gfc_copy_actual_arglist (gfc_actual_arglist *p)
     {
       new_arg = gfc_get_actual_arglist ();
       *new_arg = *p;
+
+      if (p->associated_dummy != NULL)
+	{
+	  new_arg->associated_dummy = gfc_get_dummy_arg ();
+	  *new_arg->associated_dummy = *p->associated_dummy;
+	}
 
       new_arg->expr = gfc_copy_expr (p->expr);
       new_arg->next = NULL;
@@ -1528,6 +1539,7 @@ find_array_section (gfc_expr *expr, gfc_ref *ref)
   mpz_init_set_ui (delta_mpz, one);
   mpz_init_set_ui (nelts, one);
   mpz_init (tmp_mpz);
+  mpz_init (ptr);
 
   /* Do the initialization now, so that we can cleanup without
      keeping track of where we were.  */
@@ -1671,7 +1683,6 @@ find_array_section (gfc_expr *expr, gfc_ref *ref)
       mpz_mul (delta_mpz, delta_mpz, tmp_mpz);
     }
 
-  mpz_init (ptr);
   cons = gfc_constructor_first (base);
 
   /* Now clock through the array reference, calculating the index in
@@ -1724,7 +1735,8 @@ find_array_section (gfc_expr *expr, gfc_ref *ref)
 		     "at %L requires an increase of the allowed %d "
 		     "upper limit.  See %<-fmax-array-constructor%> "
 		     "option", &expr->where, flag_max_array_constructor);
-	  return false;
+	  t = false;
+	  goto cleanup;
 	}
 
       cons = gfc_constructor_lookup (base, limit);
@@ -1739,8 +1751,6 @@ find_array_section (gfc_expr *expr, gfc_ref *ref)
 				   gfc_copy_expr (cons->expr), NULL);
     }
 
-  mpz_clear (ptr);
-
 cleanup:
 
   mpz_clear (delta_mpz);
@@ -1754,6 +1764,7 @@ cleanup:
       mpz_clear (ctr[d]);
       mpz_clear (stride[d]);
     }
+  mpz_clear (ptr);
   gfc_constructor_free (base);
   return t;
 }
@@ -3493,8 +3504,6 @@ check_restricted (gfc_expr *e)
 	    || sym->attr.implied_index
 	    || sym->attr.flavor == FL_PARAMETER
 	    || is_parent_of_current_ns (sym->ns)
-	    || (sym->ns->proc_name != NULL
-		  && sym->ns->proc_name->attr.flavor == FL_MODULE)
 	    || (gfc_is_formal_arg () && (sym->ns == gfc_current_ns)))
 	{
 	  t = true;
@@ -3647,7 +3656,7 @@ gfc_check_conformance (gfc_expr *op1, gfc_expr *op2, const char *optype_msgid, .
 /* Given an assignable expression and an arbitrary expression, make
    sure that the assignment can take place.  Only add a call to the intrinsic
    conversion routines, when allow_convert is set.  When this assign is a
-   coarray call, then the convert is done by the coarray routine implictly and
+   coarray call, then the convert is done by the coarray routine implicitly and
    adding the intrinsic conversion would do harm in most cases.  */
 
 bool
@@ -6247,7 +6256,7 @@ gfc_check_vardef_context (gfc_expr* e, bool pointer, bool alloc_obj,
       && !(sym->attr.flavor == FL_PROCEDURE && sym == sym->result)
       && !(sym->attr.flavor == FL_PROCEDURE && sym->attr.proc_pointer)
       && !(sym->attr.flavor == FL_PROCEDURE
-	   && sym->attr.function && sym->attr.pointer))
+	   && sym->attr.function && attr.pointer))
     {
       if (context)
 	gfc_error ("%qs in variable definition context (%s) at %L is not"

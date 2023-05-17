@@ -3989,7 +3989,7 @@ push_param_adjustments_for_index (isra_func_summary *ifs, unsigned base_index,
 	{
 	  ipa_argagg_value_list avl (ipcp_ts);
 	  tree value = avl.get_value (base_index, pa->unit_offset);
-	  if (value)
+	  if (value && !AGGREGATE_TYPE_P (pa->type))
 	    {
 	      if (dump_file)
 		fprintf (dump_file, "    - omitting component at byte "
@@ -4028,6 +4028,70 @@ mark_callers_calls_comdat_local (struct cgraph_node *node, void *)
   return false;
 }
 
+/* Remove any IPA-CP results stored in TS that are associated with removed
+   parameters as marked in IFS. */
+
+static void
+zap_useless_ipcp_results (const isra_func_summary *ifs, ipcp_transformation *ts)
+{
+  unsigned ts_len = vec_safe_length (ts->m_agg_values);
+
+  if (ts_len == 0)
+    return;
+
+  bool removed_item = false;
+  unsigned dst_index = 0;
+
+  for (unsigned i = 0; i < ts_len; i++)
+    {
+      ipa_argagg_value *v = &(*ts->m_agg_values)[i];
+      const isra_param_desc *desc = &(*ifs->m_parameters)[v->index];
+
+      if (!desc->locally_unused)
+	{
+	  if (removed_item)
+	    (*ts->m_agg_values)[dst_index] = *v;
+	  dst_index++;
+	}
+      else
+	removed_item = true;
+    }
+  if (dst_index == 0)
+    {
+      ggc_free (ts->m_agg_values);
+      ts->m_agg_values = NULL;
+    }
+  else if (removed_item)
+    ts->m_agg_values->truncate (dst_index);
+
+  bool useful_bits = false;
+  unsigned count = vec_safe_length (ts->bits);
+  for (unsigned i = 0; i < count; i++)
+    if ((*ts->bits)[i])
+    {
+      const isra_param_desc *desc = &(*ifs->m_parameters)[i];
+      if (desc->locally_unused)
+	(*ts->bits)[i] = NULL;
+      else
+	useful_bits = true;
+    }
+  if (!useful_bits)
+    ts->bits = NULL;
+
+  bool useful_vr = false;
+  count = vec_safe_length (ts->m_vr);
+  for (unsigned i = 0; i < count; i++)
+    if ((*ts->m_vr)[i].known)
+      {
+	const isra_param_desc *desc = &(*ifs->m_parameters)[i];
+	if (desc->locally_unused)
+	  (*ts->m_vr)[i].known = false;
+	else
+	  useful_vr = true;
+      }
+  if (!useful_vr)
+    ts->m_vr = NULL;
+}
 
 /* Do final processing of results of IPA propagation regarding NODE, clone it
    if appropriate.  */
@@ -4080,6 +4144,8 @@ process_isra_node_results (cgraph_node *node,
     }
 
   ipcp_transformation *ipcp_ts = ipcp_get_transformation_summary (node);
+  if (ipcp_ts)
+    zap_useless_ipcp_results (ifs, ipcp_ts);
   vec<ipa_adjusted_param, va_gc> *new_params = NULL;
   if (ipa_param_adjustments *old_adjustments
 	 = cinfo ? cinfo->param_adjustments : NULL)
@@ -4249,8 +4315,8 @@ adjust_parameter_descriptions (cgraph_node *node, isra_func_summary *ifs)
 
   dump_list_of_param_indices (node, "are dead on arrival or have a type "
 			      "mismatch with IPA-CP", dump_dead_indices);
-  dump_list_of_param_indices (node, "are not safe to derefernce in all callers",
-			      dump_bad_cond_indices);
+  dump_list_of_param_indices (node, "are not safe to dereference in all "
+			      "callers", dump_bad_cond_indices);
 
   return ret;
 }

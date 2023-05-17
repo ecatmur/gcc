@@ -1,3 +1,125 @@
+2023-05-16  Joseph Myers  <joseph@codesourcery.com>
+
+	* c-decl.cc (check_for_loop_decls): Use pedwarn_c11 for
+	diagnostics.
+
+2023-05-15  Joseph Myers  <joseph@codesourcery.com>
+
+	* c-decl.cc (grokdeclarator): Ignore _Atomic on function return
+	type for C2x.
+
+2023-04-30  Andrew Pinski  <apinski@marvell.com>
+
+	* c-typeck.cc (process_init_element): Print out array type
+	for excessive elements.
+
+2023-04-30  Andrew Pinski  <apinski@marvell.com>
+
+	PR c/107926
+	* c-typeck.cc (process_init_element): Move the check
+	for string cst until after the error message.
+
+2023-04-28  Eugene Rozenfeld  <erozen@microsoft.com>
+
+	* Make-lang.in: Merge perf data collected when compiling cc1 and runtime libraries
+
+2023-04-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/109409
+	* c-parser.cc (c_parser_initializer): Move diagnostics about
+	initialization of variable sized object with non-empty initializer
+	after c_parser_expr_no_commas call and ret.set_error (); after it.
+
+2023-04-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/107682
+	PR c/109412
+	* c-typeck.cc (pop_init_level): If constructor_type is FUNCTION_TYPE,
+	reject empty initializer as invalid.
+
+2023-04-26  Richard Biener  <rguenther@suse.de>
+
+	* gimple-parser.cc (c_parser_parse_gimple_body): Avoid
+	last_stmt.
+
+2023-04-25  Tobias Burnus  <tobias@codesourcery.com>
+
+	* c-parser.cc (c_parser_omp_scan_loop_body): Handle
+	zero exec statements before/after 'omp scan'.
+
+2023-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/107041
+	* c-decl.cc (diagnose_mismatched_decls): Avoid -Wenum-int-mismatch
+	warning on acc_on_device declaration.
+
+2023-03-28  David Malcolm  <dmalcolm@redhat.com>
+
+	PR c/107002
+	* c-typeck.cc (parser_build_binary_op): Update for new param of
+	check_for_xor_used_as_pow.
+
+2023-03-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/108079
+	* c-decl.cc (pop_scope): Suppress OPT_Wunused_variable warning
+	after diagnosing it.
+
+2023-02-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/108894
+	* c-decl.cc (strict_flex_array_level_of): Move to c-common.cc
+	and rename to c_strict_flex_array_level_of.
+	(is_flexible_array_member_p): Adjust caller.
+
+2023-02-18  Martin Uecker  <uecker@tugraz.at>
+
+	PR c/108375
+	* c-decl.cc (decl_jump_unsafe): Use c_type_variably_modified_p.
+	(diagnose_mismatched_decl): Dito.
+	(warn_about_goto): Dito:
+	(c_check_switch_jump_warnings): Dito.
+	(finish_decl): Dito.
+	(finish_struct): Dito.
+	(grokdeclarator): Set C_TYPE_VARIABLY_MODIFIED.
+	(finish_struct): Set C_TYPE_VARIABLY_MODIFIED.
+	* c-objc-common.cc (c_var_mod_p): New function.
+	(c_var_unspec_p): Remove.
+	* c-objc-common.h: Set lang hook.
+	* c-parser.cc (c_parser_declararion_or_fndef): Use c_type_variably_modified_p.
+	(c_parser_typeof_specifier): Dito.
+	(c_parser_has_attribute_expression): Dito.
+	(c_parser_generic_selection): Dito.
+	* c-tree.h: Define C_TYPE_VARIABLY_MODIFIED and define c_var_mode_p.
+	* c-typeck.cc: Remove c_vla_mod_p and use C_TYPE_VARIABLY_MODIFIED.
+
+2023-02-16  Patrick Palka  <ppalka@redhat.com>
+
+	* c-parser.h: Mechanically drop static from static inline
+	functions via s/^static inline/inline/g.
+
+2023-02-10  Joseph Myers  <joseph@codesourcery.com>
+
+	* c-convert.cc (c_convert): Allow conversion of a null pointer
+	constant to nullptr_t.
+	* c-typeck.cc (null_pointer_constant_p): Remove static.
+	(convert_for_assignment): Allow conversion of a null pointer
+	constant to nullptr_t.
+	(digest_init): Handle NULLPTR_TYPE among scalar conversions.
+	* c-tree.h (null_pointer_constant_p): Declare.
+
+2023-02-09  Tobias Burnus  <tobias@codesourcery.com>
+
+	* c-parser.cc (c_parser_omp_allocate): Parse align
+	clause and check for restrictions.
+
+2023-02-08  Joseph Myers  <joseph@codesourcery.com>
+
+	* c-typeck.cc (check_constexpr_init): Remove argument
+	null_pointer_constant.  Only check pointer initializers for being
+	null.
+	(digest_init): Update calls to check_constexpr_init.
+
 2023-02-02  Joseph Myers  <joseph@codesourcery.com>
 
 	* c-typeck.cc (build_binary_op): Allow comparisons between

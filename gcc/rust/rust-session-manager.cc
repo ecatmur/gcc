@@ -27,6 +27,7 @@
 #include "rust-hir-type-check.h"
 #include "rust-privacy-check.h"
 #include "rust-const-checker.h"
+#include "rust-feature-gate.h"
 #include "rust-tycheck-dump.h"
 #include "rust-compile.h"
 #include "rust-cfg-parser.h"
@@ -38,6 +39,7 @@
 #include "rust-imports.h"
 #include "rust-extern-crate.h"
 #include "rust-attributes.h"
+#include "rust-early-name-resolver.h"
 
 #include "diagnostic.h"
 #include "input.h"
@@ -191,7 +193,7 @@ Session::handle_option (
 	  else
 	    {
 	      rust_assert (!error.message.empty ());
-	      error.emit_error ();
+	      error.emit ();
 	    }
 	}
       else
@@ -389,7 +391,7 @@ Session::handle_crate_name (const AST::Crate &parsed_crate)
       if (!validate_crate_name (msg_str, error))
 	{
 	  error.locus = attr.get_locus ();
-	  error.emit_error ();
+	  error.emit ();
 	  continue;
 	}
 
@@ -410,7 +412,7 @@ Session::handle_crate_name (const AST::Crate &parsed_crate)
   if (!options.crate_name_set_manually
       && !validate_crate_name (options.crate_name, error))
     {
-      error.emit_error ();
+      error.emit ();
       rust_inform (linemap->get_location (0),
 		   "crate name inferred from this file");
     }
@@ -437,9 +439,9 @@ Session::compile_crate (const char *filename)
       "manner by passing the following flag:\n\n"
       "`-frust-incomplete-and-experimental-compiler-do-not-use`\n\nor by "
       "defining the following environment variable (any value will "
-      "do)\n\nGCCRS_INCOMPLETE_AND_EXPERIMENTAL_COMPILER_DO_NOT_USE\n\nFor"
+      "do)\n\nGCCRS_INCOMPLETE_AND_EXPERIMENTAL_COMPILER_DO_NOT_USE\n\nFor "
       "cargo-gccrs, this means passing\n\n"
-      "GCCRS_EXTRA_FLAGS=\"-frust-incomplete-and-experimental-compiler-do-not-"
+      "GCCRS_EXTRA_ARGS=\"-frust-incomplete-and-experimental-compiler-do-not-"
       "use\"\n\nas an environment variable.");
 
   RAIIFile file_wrap (filename);
@@ -454,7 +456,22 @@ Session::compile_crate (const char *filename)
   // parse file here
   /* create lexer and parser - these are file-specific and so aren't instance
    * variables */
-  Lexer lex (filename, std::move (file_wrap), linemap);
+  Optional<std::ofstream &> dump_lex_opt = Optional<std::ofstream &>::none ();
+  std::ofstream dump_lex_stream;
+  if (options.dump_option_enabled (CompileOptions::LEXER_DUMP))
+    {
+      dump_lex_stream.open (kLexDumpFile);
+      if (dump_lex_stream.fail ())
+	{
+	  rust_error_at (Linemap::unknown_location (),
+			 "cannot open %s:%m; ignored", kLexDumpFile);
+	}
+      auto stream = Optional<std::ofstream &>::some (dump_lex_stream);
+      dump_lex_opt = std::move (stream);
+    }
+
+  Lexer lex (filename, std::move (file_wrap), linemap, dump_lex_opt);
+
   Parser<Lexer> parser (lex);
 
   // generate crate from parser
@@ -463,11 +480,7 @@ Session::compile_crate (const char *filename)
   // handle crate name
   handle_crate_name (*ast_crate.get ());
 
-  // dump options
-  if (options.dump_option_enabled (CompileOptions::LEXER_DUMP))
-    {
-      dump_lex (parser);
-    }
+  // dump options except lexer dump
   if (options.dump_option_enabled (CompileOptions::PARSER_AST_DUMP))
     {
       dump_ast (parser, *ast_crate.get ());
@@ -545,6 +558,9 @@ Session::compile_crate (const char *filename)
       dump_ast_pretty (parsed_crate, true);
       rust_debug ("END POST-EXPANSION AST DUMP");
     }
+
+  // feature gating
+  FeatureGate ().check (parsed_crate);
 
   if (last_step == CompileOptions::CompileStep::NameResolution)
     return;
@@ -814,11 +830,41 @@ Session::expansion (AST::Crate &crate)
   // if not, would at least have to configure recursion_limit
   ExpansionCfg cfg;
 
+  auto fixed_point_reached = false;
+  unsigned iterations = 0;
+
   // create extctxt? from parse session, cfg, and resolver?
   /* expand by calling cxtctxt object's monotonic_expander's expand_crate
    * method. */
   MacroExpander expander (crate, cfg, *this);
-  expander.expand_crate ();
+
+  while (!fixed_point_reached && iterations < cfg.recursion_limit)
+    {
+      /* We need to name resolve macros and imports here */
+      Resolver::EarlyNameResolver ().go (crate);
+
+      expander.expand_crate ();
+
+      fixed_point_reached = !expander.has_changed ();
+      expander.reset_changed_state ();
+      iterations++;
+
+      if (saw_errors ())
+	break;
+    }
+
+  if (iterations == cfg.recursion_limit)
+    {
+      auto last_invoc = expander.get_last_invocation ();
+      auto last_def = expander.get_last_definition ();
+
+      rust_assert (last_def && last_invoc);
+
+      RichLocation range (last_invoc->get_locus ());
+      range.add_range (last_def->get_locus ());
+
+      rust_error_at (range, "reached recursion limit");
+    }
 
   // error reporting - check unused macros, get missing fragment specifiers
 
@@ -829,24 +875,6 @@ Session::expansion (AST::Crate &crate)
   // maybe create macro crate if not rustdoc
 
   rust_debug ("finished expansion");
-}
-
-void
-Session::dump_lex (Parser<Lexer> &parser) const
-{
-  std::ofstream out;
-  out.open (kLexDumpFile);
-  if (out.fail ())
-    {
-      rust_error_at (Linemap::unknown_location (), "cannot open %s:%m; ignored",
-		     kLexDumpFile);
-      return;
-    }
-
-  // TODO: rewrite lexer dump or something so that it allows for the crate
-  // to already be parsed
-  parser.debug_dump_lex_output (out);
-  out.close ();
 }
 
 void

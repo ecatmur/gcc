@@ -1225,6 +1225,10 @@ package body Sem_Ch6 is
              (E_Function | E_Procedure |
                 E_Generic_Function | E_Generic_Procedure => True,
               others => False));
+         Reinit_Field_To_Zero (Body_Id, F_Needs_No_Actuals);
+         if Ekind (Body_Id) in E_Function | E_Procedure then
+            Reinit_Field_To_Zero (Body_Id, F_Is_Inlined_Always);
+         end if;
          Mutate_Ekind       (Body_Id, E_Subprogram_Body);
          Set_Convention     (Body_Id, Convention (Gen_Id));
          Set_Is_Obsolescent (Body_Id, Is_Obsolescent (Gen_Id));
@@ -3836,6 +3840,21 @@ package body Sem_Ch6 is
          Spec_Decl := Unit_Declaration_Node (Spec_Id);
          Verify_Overriding_Indicator;
 
+         --  For functions with separate spec, if their return type was visible
+         --  through a limited-with context clause, their extra formals were
+         --  not added when the spec was frozen. Now the full view must be
+         --  available, and the extra formals can be created and Returns_By_Ref
+         --  computed (required to generate its return statements).
+
+         if Ekind (Spec_Id) = E_Function
+           and then From_Limited_With (Etype (Spec_Id))
+           and then Is_Build_In_Place_Function (Spec_Id)
+           and then not Has_BIP_Formals (Spec_Id)
+         then
+            Create_Extra_Formals (Spec_Id);
+            Compute_Returns_By_Ref (Spec_Id);
+         end if;
+
          --  In general, the spec will be frozen when we start analyzing the
          --  body. However, for internally generated operations, such as
          --  wrapper functions for inherited operations with controlling
@@ -3987,13 +4006,17 @@ package body Sem_Ch6 is
             Reference_Body_Formals (Spec_Id, Body_Id);
          end if;
 
-         Reinit_Field_To_Zero (Body_Id, F_Has_Out_Or_In_Out_Parameter);
-         Reinit_Field_To_Zero (Body_Id, F_Needs_No_Actuals,
+         Reinit_Field_To_Zero (Body_Id, F_Has_Out_Or_In_Out_Parameter,
            Old_Ekind => (E_Function | E_Procedure => True, others => False));
-         Reinit_Field_To_Zero (Body_Id, F_Is_Predicate_Function,
-           Old_Ekind => (E_Function | E_Procedure => True, others => False));
-         Reinit_Field_To_Zero (Body_Id, F_Protected_Subprogram,
-           Old_Ekind => (E_Function | E_Procedure => True, others => False));
+         Reinit_Field_To_Zero (Body_Id, F_Needs_No_Actuals);
+         Reinit_Field_To_Zero (Body_Id, F_Is_Predicate_Function);
+         Reinit_Field_To_Zero (Body_Id, F_Protected_Subprogram);
+         Reinit_Field_To_Zero (Body_Id, F_Is_Inlined_Always);
+         Reinit_Field_To_Zero (Body_Id, F_Is_Generic_Actual_Subprogram);
+         Reinit_Field_To_Zero (Body_Id, F_Is_Primitive_Wrapper);
+         Reinit_Field_To_Zero (Body_Id, F_Is_Private_Primitive);
+         Reinit_Field_To_Zero (Body_Id, F_Original_Protected_Subprogram);
+         Reinit_Field_To_Zero (Body_Id, F_Wrapped_Entity);
 
          if Ekind (Body_Id) = E_Procedure then
             Reinit_Field_To_Zero (Body_Id, F_Receiving_Entry);

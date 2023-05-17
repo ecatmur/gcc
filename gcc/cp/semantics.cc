@@ -346,7 +346,7 @@ enforce_access (tree basetype_path, tree decl, tree diag_decl,
     }
 
   tree cs = current_scope ();
-  if (processing_template_decl
+  if (current_template_parms
       && (CLASS_TYPE_P (cs) || TREE_CODE (cs) == FUNCTION_DECL))
     if (tree template_info = get_template_info (cs))
       {
@@ -2070,7 +2070,7 @@ finish_mem_initializers (tree mem_inits)
    right result.  If EVEN_UNEVAL, do this even in unevaluated context.  */
 
 tree
-force_paren_expr (tree expr, bool even_uneval)
+force_paren_expr (tree expr, bool even_uneval /* = false */)
 {
   /* This is only needed for decltype(auto) in C++14.  */
   if (cxx_dialect < cxx14)
@@ -2386,7 +2386,8 @@ finish_qualified_id_expr (tree qualifying_class,
 
   /* If EXPR occurs as the operand of '&', use special handling that
      permits a pointer-to-member.  */
-  if (address_p && done)
+  if (address_p && done
+      && TREE_CODE (qualifying_class) != ENUMERAL_TYPE)
     {
       if (TREE_CODE (expr) == SCOPE_REF)
 	expr = TREE_OPERAND (expr, 1);
@@ -3468,8 +3469,13 @@ check_template_template_default_arg (tree argument)
       && TREE_CODE (argument) != UNBOUND_CLASS_TEMPLATE)
     {
       if (TREE_CODE (argument) == TYPE_DECL)
-	error ("invalid use of type %qT as a default value for a template "
-	       "template-parameter", TREE_TYPE (argument));
+	{
+	  if (tree t = maybe_get_template_decl_from_type_decl (argument))
+	    if (TREE_CODE (t) == TEMPLATE_DECL)
+	      return t;
+	  error ("invalid use of type %qT as a default value for a template "
+		 "template-parameter", TREE_TYPE (argument));
+	}
       else
 	error ("invalid default argument for a template template parameter");
       return error_mark_node;
@@ -4208,6 +4214,16 @@ finish_id_expression_1 (tree id_expression,
     }
   else
     {
+      if (TREE_CODE (decl) == TEMPLATE_ID_EXPR
+	  && variable_template_p (TREE_OPERAND (decl, 0))
+	  && !concept_check_p (decl))
+	/* Try resolving this variable TEMPLATE_ID_EXPR (which is always
+	   considered type-dependent) now, so that the dependence test that
+	   follows gives us the right answer: if it represents a non-dependent
+	   variable template-id then finish_template_variable will yield the
+	   corresponding non-dependent VAR_DECL.  */
+	decl = finish_template_variable (decl);
+
       bool dependent_p = type_dependent_expression_p (decl);
 
       /* If the declaration was explicitly qualified indicate
@@ -4222,6 +4238,7 @@ finish_id_expression_1 (tree id_expression,
 		    : CP_ID_KIND_UNQUALIFIED)));
 
       if (dependent_p
+	  && !scope
 	  && DECL_P (decl)
 	  && any_dependent_type_attributes_p (DECL_ATTRIBUTES (decl)))
 	/* Dependent type attributes on the decl mean that the TREE_TYPE is
@@ -4275,15 +4292,6 @@ finish_id_expression_1 (tree id_expression,
 	/* Replace an evaluated use of the thread_local variable with
 	   a call to its wrapper.  */
 	decl = wrap;
-      else if (TREE_CODE (decl) == TEMPLATE_ID_EXPR
-	       && !dependent_p
-	       && variable_template_p (TREE_OPERAND (decl, 0))
-	       && !concept_check_p (decl))
-	{
-	  decl = finish_template_variable (decl);
-	  mark_used (decl);
-	  decl = convert_from_reference (decl);
-	}
       else if (concept_check_p (decl))
 	{
 	  /* Nothing more to do. All of the analysis for concept checks
@@ -4460,6 +4468,35 @@ finish_underlying_type (tree type)
 				TYPE_UNSIGNED (underlying_type));
 
   return underlying_type;
+}
+
+/* Implement the __type_pack_element keyword: Return the type
+   at index IDX within TYPES.  */
+
+static tree
+finish_type_pack_element (tree idx, tree types, tsubst_flags_t complain)
+{
+  idx = maybe_constant_value (idx);
+  if (TREE_CODE (idx) != INTEGER_CST || !INTEGRAL_TYPE_P (TREE_TYPE (idx)))
+    {
+      if (complain & tf_error)
+	error ("%<__type_pack_element%> index is not an integral constant");
+      return error_mark_node;
+    }
+  HOST_WIDE_INT val = tree_to_shwi (idx);
+  if (val < 0)
+    {
+      if (complain & tf_error)
+	error ("%<__type_pack_element%> index is negative");
+      return error_mark_node;
+    }
+  if (val >= TREE_VEC_LENGTH (types))
+    {
+      if (complain & tf_error)
+	error ("%<__type_pack_element%> index is out of range");
+      return error_mark_node;
+    }
+  return TREE_VEC_ELT (types, val);
 }
 
 /* Implement the __direct_bases keyword: Return the direct base classes
@@ -11232,14 +11269,16 @@ finish_static_assert (tree condition, tree message, location_t location,
   if (check_for_bare_parameter_packs (condition))
     condition = error_mark_node;
 
+  /* Save the condition in case it was a concept check.  */
+  tree orig_condition = condition;
+
   if (instantiation_dependent_expression_p (condition))
     {
       /* We're in a template; build a STATIC_ASSERT and put it in
          the right place. */
-      tree assertion;
-
-      assertion = make_node (STATIC_ASSERT);
-      STATIC_ASSERT_CONDITION (assertion) = condition;
+    defer:
+      tree assertion = make_node (STATIC_ASSERT);
+      STATIC_ASSERT_CONDITION (assertion) = orig_condition;
       STATIC_ASSERT_MESSAGE (assertion) = message;
       STATIC_ASSERT_SOURCE_LOCATION (assertion) = location;
 
@@ -11252,9 +11291,6 @@ finish_static_assert (tree condition, tree message, location_t location,
 
       return;
     }
-
-  /* Save the condition in case it was a concept check.  */
-  tree orig_condition = condition;
 
   /* Fold the expression and convert it to a boolean value. */
   condition = contextual_conv_bool (condition, complain);
@@ -11270,6 +11306,10 @@ finish_static_assert (tree condition, tree message, location_t location,
 
       if (integer_zerop (condition))
 	{
+	  /* CWG2518: static_assert failure in a template is not IFNDR.  */
+	  if (processing_template_decl)
+	    goto defer;
+
 	  int sz = TREE_INT_CST_LOW (TYPE_SIZE_UNIT
 				     (TREE_TYPE (TREE_TYPE (message))));
 	  int len = TREE_STRING_LENGTH (message) / sz - 1;
@@ -12045,6 +12085,9 @@ trait_expr_value (cp_trait_kind kind, tree type1, tree type2)
     case CPTK_REF_CONVERTS_FROM_TEMPORARY:
       return ref_xes_from_temporary (type1, type2, /*direct_init=*/false);
 
+    case CPTK_IS_DEDUCIBLE:
+      return type_targs_deducible_from (type1, type2);
+
 #define DEFTRAIT_TYPE(CODE, NAME, ARITY) \
     case CPTK_##CODE:
 #include "cp-trait.def"
@@ -12077,9 +12120,13 @@ check_trait_type (tree type, int kind = 1)
   if (type == NULL_TREE)
     return true;
 
-  if (TREE_CODE (type) == TREE_LIST)
-    return (check_trait_type (TREE_VALUE (type))
-	    && check_trait_type (TREE_CHAIN (type)));
+  if (TREE_CODE (type) == TREE_VEC)
+    {
+      for (tree arg : tree_vec_range (type))
+	if (!check_trait_type (arg, kind))
+	  return false;
+      return true;
+    }
 
   if (kind == 1 && TREE_CODE (type) == ARRAY_TYPE && !TYPE_DOMAIN (type))
     return true; // Array of unknown bound. Don't care about completeness.
@@ -12093,7 +12140,12 @@ check_trait_type (tree type, int kind = 1)
   if (VOID_TYPE_P (type))
     return true;
 
-  return !!complete_type_or_else (strip_array_types (type), NULL_TREE);
+  type = complete_type (strip_array_types (type));
+  if (!COMPLETE_TYPE_P (type)
+      && cxx_incomplete_type_diagnostic (NULL_TREE, type, DK_PERMERROR)
+      && !flag_permissive)
+    return false;
+  return true;
 }
 
 /* Process a trait expression.  */
@@ -12202,6 +12254,14 @@ finish_trait_expr (location_t loc, cp_trait_kind kind, tree type1, tree type2)
 	return error_mark_node;
       break;
 
+    case CPTK_IS_DEDUCIBLE:
+      if (!DECL_TYPE_TEMPLATE_P (type1))
+	{
+	  error ("%qD is not a class or alias template", type1);
+	  return error_mark_node;
+	}
+      break;
+
 #define DEFTRAIT_TYPE(CODE, NAME, ARITY) \
     case CPTK_##CODE:
 #include "cp-trait.def"
@@ -12218,7 +12278,8 @@ finish_trait_expr (location_t loc, cp_trait_kind kind, tree type1, tree type2)
 /* Process a trait type.  */
 
 tree
-finish_trait_type (cp_trait_kind kind, tree type1, tree type2)
+finish_trait_type (cp_trait_kind kind, tree type1, tree type2,
+		   tsubst_flags_t complain)
 {
   if (type1 == error_mark_node
       || type2 == error_mark_node)
@@ -12242,16 +12303,22 @@ finish_trait_type (cp_trait_kind kind, tree type1, tree type2)
     {
     case CPTK_UNDERLYING_TYPE:
       return finish_underlying_type (type1);
+
     case CPTK_REMOVE_CV:
       return cv_unqualified (type1);
+
     case CPTK_REMOVE_REFERENCE:
       if (TYPE_REF_P (type1))
 	type1 = TREE_TYPE (type1);
       return type1;
+
     case CPTK_REMOVE_CVREF:
       if (TYPE_REF_P (type1))
 	type1 = TREE_TYPE (type1);
       return cv_unqualified (type1);
+
+    case CPTK_TYPE_PACK_ELEMENT:
+      return finish_type_pack_element (type1, type2, complain);
 
 #define DEFTRAIT_EXPR(CODE, NAME, ARITY) \
     case CPTK_##CODE:

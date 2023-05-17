@@ -96,6 +96,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "i386-expand.h"
 #include "i386-features.h"
 #include "function-abi.h"
+#include "rtl-error.h"
 
 /* This file should be included last.  */
 #include "target-def.h"
@@ -6876,7 +6877,9 @@ ix86_compute_frame_layout (void)
 	 stack clash protections are enabled and the allocated frame is
 	 larger than the probe interval, then use pushes to save
 	 callee saved registers.  */
-      || (flag_stack_clash_protection && to_allocate > get_probe_interval ()))
+      || (flag_stack_clash_protection
+	  && !ix86_target_stack_probe ()
+	  && to_allocate > get_probe_interval ()))
     frame->save_regs_using_mov = false;
 
   if (ix86_using_red_zone ()
@@ -8761,8 +8764,11 @@ ix86_expand_prologue (void)
       sse_registers_saved = true;
     }
 
-  /* If stack clash protection is requested, then probe the stack.  */
-  if (allocate >= 0 && flag_stack_clash_protection)
+  /* If stack clash protection is requested, then probe the stack, unless it
+     is already probed on the target.  */
+  if (allocate >= 0
+      && flag_stack_clash_protection
+      && !ix86_target_stack_probe ())
     {
       ix86_adjust_stack_and_probe (allocate, int_registers_saved, false);
       allocate = 0;
@@ -11029,8 +11035,9 @@ ix86_legitimate_address_p (machine_mode, rtx addr, bool strict)
       if (reg == NULL_RTX)
 	return false;
 
-      if ((strict && ! REG_OK_FOR_BASE_STRICT_P (reg))
-	  || (! strict && ! REG_OK_FOR_BASE_NONSTRICT_P (reg)))
+      unsigned int regno = REGNO (reg);
+      if ((strict && !REGNO_OK_FOR_BASE_P (regno))
+	  || (!strict && !REGNO_OK_FOR_BASE_NONSTRICT_P (regno)))
 	/* Base is not valid.  */
 	return false;
     }
@@ -11043,8 +11050,9 @@ ix86_legitimate_address_p (machine_mode, rtx addr, bool strict)
       if (reg == NULL_RTX)
 	return false;
 
-      if ((strict && ! REG_OK_FOR_INDEX_STRICT_P (reg))
-	  || (! strict && ! REG_OK_FOR_INDEX_NONSTRICT_P (reg)))
+      unsigned int regno = REGNO (reg);
+      if ((strict && !REGNO_OK_FOR_INDEX_P (regno))
+	  || (!strict && !REGNO_OK_FOR_INDEX_NONSTRICT_P (regno)))
 	/* Index is not valid.  */
 	return false;
     }
@@ -13213,7 +13221,13 @@ ix86_print_operand (FILE *file, rtx x, int code)
 	    }
 
 	  if (GET_MODE_CLASS (GET_MODE (x)) == MODE_FLOAT)
-	    warning (0, "non-integer operand used with operand code %<z%>");
+	    {
+	      if (this_is_asm_operands)
+		warning_for_asm (this_is_asm_operands,
+				 "non-integer operand used with operand code %<z%>");
+	      else
+		warning (0, "non-integer operand used with operand code %<z%>");
+	    }
 	  /* FALLTHRU */
 
 	case 'Z':
@@ -13276,11 +13290,12 @@ ix86_print_operand (FILE *file, rtx x, int code)
 	  else
 	    {
 	      output_operand_lossage ("invalid operand type used with "
-				      "operand code 'Z'");
+				      "operand code '%c'", code);
 	      return;
 	    }
 
-	  output_operand_lossage ("invalid operand size for operand code 'Z'");
+	  output_operand_lossage ("invalid operand size for operand code '%c'",
+				  code);
 	  return;
 
 	case 'd':
@@ -16677,10 +16692,18 @@ assign_386_stack_local (machine_mode mode, enum ix86_stack_slot n)
     if (s->mode == mode && s->n == n)
       return validize_mem (copy_rtx (s->rtl));
 
+  int align = 0;
+  /* For DImode with SLOT_FLOATxFDI_387 use 32-bit
+     alignment with -m32 -mpreferred-stack-boundary=2.  */
+  if (mode == DImode
+      && !TARGET_64BIT
+      && n == SLOT_FLOATxFDI_387
+      && ix86_preferred_stack_boundary < GET_MODE_ALIGNMENT (DImode))
+    align = 32;
   s = ggc_alloc<stack_local_entry> ();
   s->n = n;
   s->mode = mode;
-  s->rtl = assign_stack_local (mode, GET_MODE_SIZE (mode), 0);
+  s->rtl = assign_stack_local (mode, GET_MODE_SIZE (mode), align);
 
   s->next = ix86_stack_locals;
   ix86_stack_locals = s;
@@ -19834,9 +19857,12 @@ inline_memory_move_cost (machine_mode mode, enum reg_class regclass, int in)
 	  index = 1;
 	  break;
 	/* DImode loads and stores assumed to cost the same as SImode.  */
-	default:
+	case 4:
+	case 8:
 	  index = 2;
 	  break;
+	default:
+	  return 100;
 	}
 
       if (in == 2)
@@ -20413,7 +20439,8 @@ ix86_widen_mult_cost (const struct processor_costs *cost,
       basic_cost = cost->mulss * 2 + cost->sse_op * 4;
       break;
     default:
-      gcc_unreachable();
+      /* Not implemented.  */
+      return 100;
     }
   return ix86_vec_cost (mode, basic_cost + extra_cost);
 }
@@ -20436,36 +20463,52 @@ ix86_multiplication_cost (const struct processor_costs *cost,
     return  ix86_vec_cost (mode,
 			   inner_mode == DFmode ? cost->mulsd : cost->mulss);
   else if (GET_MODE_CLASS (mode) == MODE_VECTOR_INT)
-    {
-      /* vpmullq is used in this case. No emulation is needed.  */
-      if (TARGET_AVX512DQ)
-	return ix86_vec_cost (mode, cost->mulss);
+    switch (mode)
+      {
+      case V16QImode:
+	/* V*QImode is emulated with 4-11 insns.  */
+	if (TARGET_AVX512BW && TARGET_AVX512VL)
+	  return ix86_vec_cost (mode, cost->mulss + cost->sse_op * 3);
+	else if (TARGET_XOP)
+	  return ix86_vec_cost (mode, cost->mulss * 2 + cost->sse_op * 5);
+	/* FALLTHRU */
+      case V32QImode:
+	if (TARGET_AVX512BW && mode == V32QImode)
+	  return ix86_vec_cost (mode, cost->mulss + cost->sse_op * 3);
+	else
+	  return ix86_vec_cost (mode, cost->mulss * 2 + cost->sse_op * 7);
 
-      /* V*QImode is emulated with 7-13 insns.  */
-      if (mode == V16QImode || mode == V32QImode)
-	{
-	  int extra = 11;
-	  if (TARGET_XOP && mode == V16QImode)
-	    extra = 5;
-	  else if (TARGET_SSSE3)
-	    extra = 6;
-	  return ix86_vec_cost (mode, cost->mulss * 2 + cost->sse_op * extra);
-	}
-      /* V*DImode is emulated with 5-8 insns.  */
-      else if (mode == V2DImode || mode == V4DImode)
-	{
-	  if (TARGET_XOP && mode == V2DImode)
-	    return ix86_vec_cost (mode, cost->mulss * 2 + cost->sse_op * 3);
-	  else
-	    return ix86_vec_cost (mode, cost->mulss * 3 + cost->sse_op * 5);
-	}
-      /* Without sse4.1, we don't have PMULLD; it's emulated with 7
-	 insns, including two PMULUDQ.  */
-      else if (mode == V4SImode && !(TARGET_SSE4_1 || TARGET_AVX))
-	return ix86_vec_cost (mode, cost->mulss * 2 + cost->sse_op * 5);
-      else
+      case V64QImode:
+	return ix86_vec_cost (mode, cost->mulss * 2 + cost->sse_op * 9);
+
+      case V4SImode:
+	/* pmulld is used in this case. No emulation is needed.  */
+	if (TARGET_SSE4_1)
+	  goto do_native;
+	/* V4SImode is emulated with 7 insns.  */
+	else
+	  return ix86_vec_cost (mode, cost->mulss * 2 + cost->sse_op * 5);
+
+      case V2DImode:
+      case V4DImode:
+	/* vpmullq is used in this case. No emulation is needed.  */
+	if (TARGET_AVX512DQ && TARGET_AVX512VL)
+	  goto do_native;
+	/* V*DImode is emulated with 6-8 insns.  */
+	else if (TARGET_XOP && mode == V2DImode)
+	  return ix86_vec_cost (mode, cost->mulss * 2 + cost->sse_op * 4);
+	/* FALLTHRU */
+      case V8DImode:
+	/* vpmullq is used in this case. No emulation is needed.  */
+	if (TARGET_AVX512DQ && mode == V8DImode)
+	  goto do_native;
+	else
+	  return ix86_vec_cost (mode, cost->mulss * 3 + cost->sse_op * 5);
+
+      default:
+      do_native:
 	return ix86_vec_cost (mode, cost->mulss);
-    }
+      }
   else
     return (cost->mult_init[MODE_INDEX (mode)] + cost->mult_bit * 7);
 }
@@ -21810,8 +21853,12 @@ x86_function_profiler (FILE *file, int labelno ATTRIBUTE_UNUSED)
 	      break;
 	    case CM_SMALL_PIC:
 	    case CM_MEDIUM_PIC:
-	      fprintf (file, "1:\tcall\t*%s@GOTPCREL(%%rip)\n", mcount_name);
-	      break;
+	      if (!ix86_direct_extern_access)
+		{
+		  fprintf (file, "1:\tcall\t*%s@GOTPCREL(%%rip)\n", mcount_name);
+		  break;
+		}
+	      /* fall through */
 	    default:
 	      x86_print_call_or_nop (file, mcount_name);
 	      break;
@@ -22770,6 +22817,27 @@ ix86_mangle_type (const_tree type)
     }
 }
 
+/* Create C++ tinfo symbols for only conditionally available fundamental
+   types.  */
+
+static void
+ix86_emit_support_tinfos (emit_support_tinfos_callback callback)
+{
+  extern tree ix86_float16_type_node;
+  extern tree ix86_bf16_type_node;
+
+  if (!TARGET_SSE2)
+    {
+      gcc_checking_assert (!float16_type_node && !bfloat16_type_node);
+      float16_type_node = ix86_float16_type_node;
+      bfloat16_type_node = ix86_bf16_type_node;
+      callback (float16_type_node);
+      callback (bfloat16_type_node);
+      float16_type_node = NULL_TREE;
+      bfloat16_type_node = NULL_TREE;
+    }
+}
+
 static GTY(()) tree ix86_tls_stack_chk_guard_decl;
 
 static tree
@@ -23529,8 +23597,10 @@ ix86_vector_costs::add_stmt_cost (int count, vect_cost_for_stmt kind,
       && stmt_info
       && (STMT_VINFO_TYPE (stmt_info) == load_vec_info_type
 	  || STMT_VINFO_TYPE (stmt_info) == store_vec_info_type)
-      && STMT_VINFO_MEMORY_ACCESS_TYPE (stmt_info) == VMAT_ELEMENTWISE
-      && TREE_CODE (DR_STEP (STMT_VINFO_DATA_REF (stmt_info))) != INTEGER_CST)
+      && ((STMT_VINFO_MEMORY_ACCESS_TYPE (stmt_info) == VMAT_ELEMENTWISE
+	   && (TREE_CODE (DR_STEP (STMT_VINFO_DATA_REF (stmt_info)))
+	       != INTEGER_CST))
+	  || STMT_VINFO_MEMORY_ACCESS_TYPE (stmt_info) == VMAT_GATHER_SCATTER))
     {
       stmt_cost = ix86_builtin_vectorization_cost (kind, vectype, misalign);
       stmt_cost *= (TYPE_VECTOR_SUBPARTS (vectype) + 1);
@@ -24169,15 +24239,6 @@ ix86_optab_supported_p (int op, machine_mode mode1, machine_mode,
     default:
       return true;
     }
-}
-
-/* Implement the TARGET_GEN_MEMSET_SCRATCH_RTX hook.  Return a scratch
-   register in MODE for vector load and store.  */
-
-rtx
-ix86_gen_scratch_sse_rtx (machine_mode mode)
-{
-  return gen_reg_rtx (mode);
 }
 
 /* Address space support.
@@ -24949,6 +25010,9 @@ ix86_libgcc_floating_mode_supported_p
 #undef TARGET_MANGLE_TYPE
 #define TARGET_MANGLE_TYPE ix86_mangle_type
 
+#undef TARGET_EMIT_SUPPORT_TINFOS
+#define TARGET_EMIT_SUPPORT_TINFOS ix86_emit_support_tinfos
+
 #undef TARGET_STACK_PROTECT_GUARD
 #define TARGET_STACK_PROTECT_GUARD ix86_stack_protect_guard
 
@@ -25209,7 +25273,8 @@ ix86_libgcc_floating_mode_supported_p
 #undef TARGET_MEMTAG_TAG_SIZE
 #define TARGET_MEMTAG_TAG_SIZE ix86_memtag_tag_size
 
-static bool ix86_libc_has_fast_function (int fcode ATTRIBUTE_UNUSED)
+static bool
+ix86_libc_has_fast_function (int fcode ATTRIBUTE_UNUSED)
 {
 #ifdef OPTION_GLIBC
   if (OPTION_GLIBC)
@@ -25224,8 +25289,57 @@ static bool ix86_libc_has_fast_function (int fcode ATTRIBUTE_UNUSED)
 #undef TARGET_LIBC_HAS_FAST_FUNCTION
 #define TARGET_LIBC_HAS_FAST_FUNCTION ix86_libc_has_fast_function
 
-#undef TARGET_GEN_MEMSET_SCRATCH_RTX
-#define TARGET_GEN_MEMSET_SCRATCH_RTX ix86_gen_scratch_sse_rtx
+static unsigned
+ix86_libm_function_max_error (unsigned cfn, machine_mode mode,
+			      bool boundary_p)
+{
+#ifdef OPTION_GLIBC
+  bool glibc_p = OPTION_GLIBC;
+#else
+  bool glibc_p = false;
+#endif
+  if (glibc_p)
+    {
+      /* If __FAST_MATH__ is defined, glibc provides libmvec.  */
+      unsigned int libmvec_ret = 0;
+      if (!flag_trapping_math
+	  && flag_unsafe_math_optimizations
+	  && flag_finite_math_only
+	  && !flag_signed_zeros
+	  && !flag_errno_math)
+	switch (cfn)
+	  {
+	  CASE_CFN_COS:
+	  CASE_CFN_COS_FN:
+	  CASE_CFN_SIN:
+	  CASE_CFN_SIN_FN:
+	    if (!boundary_p)
+	      {
+		/* With non-default rounding modes, libmvec provides
+		   complete garbage in results.  E.g.
+		   _ZGVcN8v_sinf for 1.40129846e-45f in FE_UPWARD
+		   returns 0.00333309174f rather than 1.40129846e-45f.  */
+		if (flag_rounding_math)
+		  return ~0U;
+		/* https://www.gnu.org/software/libc/manual/html_node/Errors-in-Math-Functions.html
+		   claims libmvec maximum error is 4ulps.
+		   My own random testing indicates 2ulps for SFmode and
+		   0.5ulps for DFmode, but let's go with the 4ulps.  */
+		libmvec_ret = 4;
+	      }
+	    break;
+	  default:
+	    break;
+	  }
+      unsigned int ret = glibc_linux_libm_function_max_error (cfn, mode,
+							      boundary_p);
+      return MAX (ret, libmvec_ret);
+    }
+  return default_libm_function_max_error (cfn, mode, boundary_p);
+}
+
+#undef TARGET_LIBM_FUNCTION_MAX_ERROR
+#define TARGET_LIBM_FUNCTION_MAX_ERROR ix86_libm_function_max_error
 
 #if CHECKING_P
 #undef TARGET_RUN_TARGET_SELFTESTS
