@@ -141,11 +141,11 @@ enum feature_priority
   P_PROC_FMA,
   P_BMI2,
   P_AVX2,
-  P_PROC_AVX2,
   P_X86_64_V3,
+  P_PROC_AVX2,
   P_AVX512F,
-  P_PROC_AVX512F,
   P_X86_64_V4,
+  P_PROC_AVX512F,
   P_PROC_DYNAMIC
 };
 
